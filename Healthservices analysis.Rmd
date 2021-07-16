@@ -1,0 +1,2218 @@
+---
+title: "STL County COVID-19 Survey Health Services Analysis"
+author: "Kim Johnson"
+date: "12/11/2020"
+output: html_document
+---
+
+## Open libraries and Import data
+```{r}
+library(survey)
+library(readr)
+library("ggplot2")
+library(tidyverse)        #data management/visulizaiton
+library(RColorBrewer)     #ggplot colors
+library(patchwork)        #combine graphs
+library(forestplot)
+
+#install.packages("jtools")
+library(jtools)
+
+#import imputed dataset
+stltestsurv<-read_sas("/Users/kijohnson/Box/COVID Survey Shared Data/Newest data/MSG Weighted Dataset July 12, 2021 (Final)/msgsurveyfinal.sas7bdat")
+```
+
+## Data Management - Sociodemographics
+```{r}
+#format Sex 
+stltestsurv$SEX_I[stltestsurv$GENDER_I==1]<-0 #male
+stltestsurv$SEX_I[stltestsurv$GENDER_I==2]<-1 #female
+stltestsurv$SEX_I<-factor(stltestsurv$SEX_I, levels=c(0:1), labels=c("Male", "Female"))
+table(stltestsurv$SEX_I)
+
+#format RACE 
+stltestsurv$Race_cat2_I[stltestsurv$RACE_I==1]<-0 #White
+stltestsurv$Race_cat2_I[stltestsurv$RACE_I==2|stltestsurv$RACE_I>=3]<-1 #Black/Other
+stltestsurv$Race_cat2_I<-factor(stltestsurv$Race_cat2_I, levels=c(0:1), labels=c("White", "Black/Other"))
+table(stltestsurv$Race_cat2_I)
+
+#format age group
+stltestsurv$age_cat<-factor(stltestsurv$AGE_I, levels=c(1:6), labels=c("18-24 years", "25-34 years", "35-44 years", "45-54 years", "55-64 years", ">=65 years"))
+table(stltestsurv$age_cat)
+
+#make 3 category age variable
+stltestsurv$age_cat2<-ifelse(stltestsurv$age_cat %in% c("18-24 years", "25-34 years", "35-44 years"), 0, ifelse(stltestsurv$age_cat %in% c("45-54 years", "55-64 years"), 1, 2))
+stltestsurv$age_cat2<-factor(stltestsurv$age_cat2, levels=c(0:2), labels=c("18-44 years", "44-64 years", ">=65 years"))
+table(stltestsurv$age_cat2)
+
+#yes or no
+stltestsurv$UMC<-ifelse(stltestsurv$CCHC01_I==1|stltestsurv$CCHC02_I==1|stltestsurv$CCHC03_I==1|stltestsurv$CURRASTH_I==1|stltestsurv$CCHC06_I==1|stltestsurv$CCHC07_I==1|
+stltestsurv$CCHC08_I==1|stltestsurv$CCHC09_I==1|stltestsurv$CCHC10_I==1|stltestsurv$CCHC11_I==1|stltestsurv$CCHC12_I%in%c(1,4)|stltestsurv$BPH01_I%in%c(1,4), 1, 
+ifelse(stltestsurv$CCHC01_I==2 & stltestsurv$CCHC02_I== 2 & stltestsurv$CCHC03_I==2 & stltestsurv$CURRASTH_I== 0 &
+stltestsurv$CCHC06_I==2 &  stltestsurv$CCHC07_I==2 & stltestsurv$CCHC08_I==2  &stltestsurv$CCHC09_I==2 & stltestsurv$CCHC10_I==2 & stltestsurv$CCHC11_I==2 & stltestsurv$CCHC12_I%in%c(2,3) & stltestsurv$BPH01_I%in%c(2,3), 0, NA))
+table(stltestsurv$UMC)
+
+#Make new variables for each as 1, 0 and then remove these variables after making a score variable
+stltestsurv$CCHC01T<-ifelse(stltestsurv$CCHC01_I==1, 1, ifelse(stltestsurv$CCHC01_I%in%c(2,7), 0, NA))
+stltestsurv$CCHC02T<-ifelse(stltestsurv$CCHC02_I==1, 1, ifelse(stltestsurv$CCHC02_I%in%c(2,7), 0, NA))
+stltestsurv$CCHC03T<-ifelse(stltestsurv$CCHC03_I==1, 1, ifelse(stltestsurv$CCHC03_I%in%c(2,7), 0, NA))
+stltestsurv$CCHC04T<-ifelse(stltestsurv$CURRASTH_I==1, 1, ifelse(stltestsurv$CURRASTH_I==0, 0, NA))
+stltestsurv$CCHC06T<-ifelse(stltestsurv$CCHC06_I==1, 1, ifelse(stltestsurv$CCHC06_I%in%c(2,7), 0, NA))
+stltestsurv$CCHC07T<-ifelse(stltestsurv$CCHC07_I==1, 1, ifelse(stltestsurv$CCHC07_I%in%c(2,7), 0, NA))
+stltestsurv$CCHC08T<-ifelse(stltestsurv$CCHC08_I==1, 1, ifelse(stltestsurv$CCHC08_I%in%c(2,7), 0, NA))
+stltestsurv$CCHC09T<-ifelse(stltestsurv$CCHC09_I==1, 1, ifelse(stltestsurv$CCHC09_I%in%c(2,7), 0, NA))
+stltestsurv$CCHC10T<-ifelse(stltestsurv$CCHC10_I==1, 1, ifelse(stltestsurv$CCHC10_I%in%c(2,7), 0, NA))
+stltestsurv$CCHC11T<-ifelse(stltestsurv$CCHC11_I==1, 1, ifelse(stltestsurv$CCHC11_I%in%c(2,7), 0, NA))
+stltestsurv$CCHC12T<-ifelse(stltestsurv$CCHC12_I%in% c(1,4), 1, ifelse(stltestsurv$CCHC12_I%in%c(2,3,7), 0, NA))
+stltestsurv$BPH01T<-ifelse(stltestsurv$BPH01_I%in% c(1,4), 1, ifelse(stltestsurv$BPH01_I%in%c(2,3,7), 0, NA))
+
+#0, 1, or >1
+stltestsurv$UMC_score<-stltestsurv$CCHC01T+ stltestsurv$CCHC02T + stltestsurv$CCHC03T + stltestsurv$CCHC04T + stltestsurv$CCHC06T + stltestsurv$CCHC07T + stltestsurv$CCHC08T + stltestsurv$CCHC09T + stltestsurv$CCHC10T + stltestsurv$CCHC11T + stltestsurv$CCHC12T + stltestsurv$BPH01T
+
+table(stltestsurv$UMC_score)
+
+#UMC_scorecat
+stltestsurv$UMC_scorecat<-ifelse(stltestsurv$UMC_score==0, 0, ifelse(stltestsurv$UMC_score==1, 1, 2))
+table(stltestsurv$UMC_scorecat, useNA = "always")
+
+stltestsurv$UMC_scorecat<-factor(stltestsurv$UMC_scorecat, levels=c(0:2), labels=c("No medical conditions", "1 medical condition", ">=2 medical conditions"))
+table(stltestsurv$UMC_scorecat)
+
+stltestsurv$INSURANCE_I<-factor(stltestsurv$INSURANCE_I, levels=c(0:1), labels=c("Not insured", "Insured"))
+
+table(stltestsurv$INSURANCE_I,useNA = "always")
+
+#make factor variable stltestsurv$CHS01
+class(stltestsurv$CHS01_I)
+table(stltestsurv$CHS01_I)
+
+stltestsurv$CHS01<-factor(stltestsurv$CHS01_I,  labels=c("Excellent", "Very good", "Good", "Fair", "Poor", "Unknown"))
+table(stltestsurv$CHS01)
+
+#combine excellent and very good and fair and poor into new variable
+stltestsurv$genhealth[stltestsurv$CHS01 %in% c("Excellent", "Very good")]<-0 
+stltestsurv$genhealth[stltestsurv$CHS01==c("Good")]<-1
+stltestsurv$genhealth[stltestsurv$CHS01 %in% c("Fair", "Poor")]<-2
+stltestsurv$genhealth[stltestsurv$CHS01 %in% c("Unknown")]<-3
+
+table(stltestsurv$genhealth)
+stltestsurv$genhealth<-factor(stltestsurv$genhealth, levels=(0:3), labels=c("Excellent/Very good",  "Good", "Fair/Poor", "Unknown"))
+
+#recode additional demographic variables for Table 1
+#education
+stltestsurv$education<-factor(stltestsurv$EDUCATION_I, levels=c(1:3), labels=c("Highschool or less" , "Some college", "College graduate"))
+#marital status
+stltestsurv$marital<-factor(stltestsurv$MARITAL_I, levels=c(1:4), labels=c("Married" , "Divorced", "Widowed/Separated", "Never married"))
+
+table(stltestsurv$education)
+table(stltestsurv$marital)
+```
+
+## Data Management - Health Services 1
+```{r}
+#format SACI12
+stltestsurv$medaptcan<-ifelse(stltestsurv$SACI12_I==1, 1, 0) #Has had apts cancelled
+table(stltestsurv$medaptcan)
+
+stltestsurv$medaptcan<-factor(stltestsurv$medaptcan, levels=c(1:0), labels=c("Has had appointments cancelled", "Has not/unsure had appointments cancelled"))
+
+table(stltestsurv$SACI12_I)
+table(stltestsurv$medaptcan)
+
+#format SACI13_1
+stltestsurv$medaptcantype1[stltestsurv$SACI13_1==1]<-0 #Cancer screening includng colonoscopy, mammogram, or pap smear
+stltestsurv$medaptcantype1[stltestsurv$SACI13_1==2]<-1 #Primary care
+stltestsurv$medaptcantype1[stltestsurv$SACI13_1==3]<-2 #Elective surgery or procedure
+stltestsurv$medaptcantype1[stltestsurv$SACI13_1==4]<-3 #Mental health
+stltestsurv$medaptcantype1[stltestsurv$SACI13_1==5]<-4 #Dermatology
+stltestsurv$medaptcantype1[stltestsurv$SACI13_1==6]<-5 #Oncology
+stltestsurv$medaptcantype1[stltestsurv$SACI13_1==7]<-6 #Other specialty care (such as cardiology, endocrinology, urology)
+stltestsurv$medaptcantype1[stltestsurv$SACI13_1==8]<-7 #Physical therapy
+stltestsurv$medaptcantype1[stltestsurv$SACI13_1==9]<-8 #Dental
+stltestsurv$medaptcantype1[stltestsurv$SACI13_1==10]<-9 #Eyecare
+stltestsurv$medaptcantype1[stltestsurv$SACI13_1==11]<-10 #Other appointment
+stltestsurv$medaptcantype1[stltestsurv$SACI13_1==77]<-11 #Unsure
+stltestsurv$medaptcantype1<-factor(stltestsurv$medaptcantype1, levels=c(0:11), labels=c("Cancer screening includng colonoscopy, mammogram, or pap smear", "Primary Care", "Elective surgery or procedure", "Mental health", "Dermatology", "Oncology", "Other specialty care (such as cardiology, endocrinology, urology)", "Physical therapy", "Dental", "Eyecare", "Other appointment", "Unsure"))
+table(stltestsurv$SACI13_1)
+table(stltestsurv$medaptcantype1)
+
+#format SACI13_2
+stltestsurv$medaptcantype2[stltestsurv$SACI13_2==1]<-0 #Cancer screening includng colonoscopy, mammogram, or pap smear
+stltestsurv$medaptcantype2[stltestsurv$SACI13_2==2]<-1 #Primary care
+stltestsurv$medaptcantype2[stltestsurv$SACI13_2==3]<-2 #Elective surgery or procedure
+stltestsurv$medaptcantype2[stltestsurv$SACI13_2==4]<-3 #Mental health
+stltestsurv$medaptcantype2[stltestsurv$SACI13_2==5]<-4 #Dermatology
+stltestsurv$medaptcantype2[stltestsurv$SACI13_2==6]<-5 #Oncology
+stltestsurv$medaptcantype2[stltestsurv$SACI13_2==7]<-6 #Other specialty care (such as cardiology, endocrinology, urology)
+stltestsurv$medaptcantype2[stltestsurv$SACI13_2==8]<-7 #Physical therapy
+stltestsurv$medaptcantype2[stltestsurv$SACI13_2==9]<-8 #Dental
+stltestsurv$medaptcantype2[stltestsurv$SACI13_2==10]<-9 #Eyecare
+stltestsurv$medaptcantype2[stltestsurv$SACI13_2==11]<-10 #Other appointment
+stltestsurv$medaptcantype2[stltestsurv$SACI13_2==77]<-11 #Unsure
+stltestsurv$medaptcantype2<-factor(stltestsurv$medaptcantype2, levels=c(0:11), labels=c("Cancer screening including colonoscopy, mammogram, or pap smear", "Primary Care", "Elective surgery or procedure", "Mental health", "Dermatology", "Oncology", "Other specialty care (such as cardiology, endocrinology, urology)", "Physical therapy", "Dental", "Eyecare", "Other appointment", "Unsure"))
+
+table(stltestsurv$medaptcantype2)
+
+#format SACI13_4
+stltestsurv$medaptcantype3[stltestsurv$SACI13_3==1]<-0 #Cancer screening includng colonoscopy, mammogram, or pap smear
+stltestsurv$medaptcantype3[stltestsurv$SACI13_3==2]<-1 #Primary care
+stltestsurv$medaptcantype3[stltestsurv$SACI13_3==3]<-2 #Elective surgery or procedure
+stltestsurv$medaptcantype3[stltestsurv$SACI13_3==4]<-3 #Mental health
+stltestsurv$medaptcantype3[stltestsurv$SACI13_3==5]<-4 #Dermatology
+stltestsurv$medaptcantype3[stltestsurv$SACI13_3==6]<-5 #Oncology
+stltestsurv$medaptcantype3[stltestsurv$SACI13_3==7]<-6 #Other specialty care (such as cardiology, endocrinology, urology)
+stltestsurv$medaptcantype3[stltestsurv$SACI13_3==8]<-7 #Physical therapy
+stltestsurv$medaptcantype3[stltestsurv$SACI13_3==9]<-8 #Dental
+stltestsurv$medaptcantype3[stltestsurv$SACI13_3==10]<-9 #Eyecare
+stltestsurv$medaptcantype3[stltestsurv$SACI13_3==11]<-10 #Other appointment
+stltestsurv$medaptcantype3[stltestsurv$SACI13_3==77]<-11 #Unsure
+stltestsurv$medaptcantype3<-factor(stltestsurv$medaptcantype3, levels=c(0:11), labels=c("Cancer screening includng colonoscopy, mammogram, or pap smear", "Primary Care", "Elective surgery or procedure", "Mental health", "Dermatology", "Oncology", "Other specialty care (such as cardiology, endocrinology, urology)", "Physical therapy", "Dental", "Eyecare", "Other appointment", "Unsure"))
+
+table(stltestsurv$medaptcantype3)
+
+#format SACI13_4
+stltestsurv$medaptcantype4[stltestsurv$SACI13_4==1]<-0 #Cancer screening includng colonoscopy, mammogram, or pap smear
+stltestsurv$medaptcantype4[stltestsurv$SACI13_4==2]<-1 #Primary care
+stltestsurv$medaptcantype4[stltestsurv$SACI13_4==3]<-2 #Elective surgery or procedure
+stltestsurv$medaptcantype4[stltestsurv$SACI13_4==4]<-3 #Mental health
+stltestsurv$medaptcantype4[stltestsurv$SACI13_4==5]<-4 #Dermatology
+stltestsurv$medaptcantype4[stltestsurv$SACI13_4==6]<-5 #Oncology
+stltestsurv$medaptcantype4[stltestsurv$SACI13_4==7]<-6 #Other specialty care (such as cardiology, endocrinology, urology)
+stltestsurv$medaptcantype4[stltestsurv$SACI13_4==8]<-7 #Physical therapy
+stltestsurv$medaptcantype4[stltestsurv$SACI13_4==9]<-8 #Dental
+stltestsurv$medaptcantype4[stltestsurv$SACI13_4==10]<-9 #Eyecare
+stltestsurv$medaptcantype4[stltestsurv$SACI13_4==11]<-10 #Other appointment
+stltestsurv$medaptcantype4[stltestsurv$SACI13_4==77]<-11 #Other appointment
+stltestsurv$medaptcantype4<-factor(stltestsurv$medaptcantype4, levels=c(0:11), labels=c("Cancer screening includng colonoscopy, mammogram, or pap smear", "Primary Care", "Elective surgery or procedure", "Mental health", "Dermatology", "Oncology", "Other specialty care (such as cardiology, endocrinology, urology)", "Physical therapy", "Dental", "Eyecare", "Other appointment", "Unsure"))
+
+table(stltestsurv$medaptcantype4)
+
+#format SACI13_5
+stltestsurv$medaptcantype5[stltestsurv$SACI13_5==1]<-0 #Cancer screening includng colonoscopy, mammogram, or pap smear
+stltestsurv$medaptcantype5[stltestsurv$SACI13_5==2]<-1 #Primary care
+stltestsurv$medaptcantype5[stltestsurv$SACI13_5==3]<-2 #Elective surgery or procedure
+stltestsurv$medaptcantype5[stltestsurv$SACI13_5==4]<-3 #Mental health
+stltestsurv$medaptcantype5[stltestsurv$SACI13_5==5]<-4 #Dermatology
+stltestsurv$medaptcantype5[stltestsurv$SACI13_5==6]<-5 #Oncology
+stltestsurv$medaptcantype5[stltestsurv$SACI13_5==7]<-6 #Other specialty care (such as cardiology, endocrinology, urology)
+stltestsurv$medaptcantype5[stltestsurv$SACI13_5==8]<-7 #Physical therapy
+stltestsurv$medaptcantype5[stltestsurv$SACI13_5==9]<-8 #Dental
+stltestsurv$medaptcantype5[stltestsurv$SACI13_5==10]<-9 #Eyecare
+stltestsurv$medaptcantype5[stltestsurv$SACI13_5==11]<-10 #Other appointment
+stltestsurv$medaptcantype5[stltestsurv$SACI13_5==77]<-11 #Other appointment
+stltestsurv$medaptcantype5<-factor(stltestsurv$medaptcantype5, levels=c(0:11), labels=c("Cancer screening includng colonoscopy, mammogram, or pap smear", "Primary Care", "Elective surgery or procedure", "Mental health", "Dermatology", "Oncology", "Other specialty care (such as cardiology, endocrinology, urology)", "Physical therapy", "Dental", "Eyecare", "Other appointment", "Unsure"))
+
+table(stltestsurv$medaptcantype5)
+
+#format SACI13_6
+stltestsurv$medaptcantype6[stltestsurv$SACI13_6==1]<-0 #Cancer screening includng colonoscopy, mammogram, or pap smear
+stltestsurv$medaptcantype6[stltestsurv$SACI13_6==2]<-1 #Primary care
+stltestsurv$medaptcantype6[stltestsurv$SACI13_6==3]<-2 #Elective surgery or procedure
+stltestsurv$medaptcantype6[stltestsurv$SACI13_6==4]<-3 #Mental health
+stltestsurv$medaptcantype6[stltestsurv$SACI13_6==5]<-4 #Dermatology
+stltestsurv$medaptcantype6[stltestsurv$SACI13_6==6]<-5 #Oncology
+stltestsurv$medaptcantype6[stltestsurv$SACI13_6==7]<-6 #Other specialty care (such as cardiology, endocrinology, urology)
+stltestsurv$medaptcantype6[stltestsurv$SACI13_6==8]<-7 #Physical therapy
+stltestsurv$medaptcantype6[stltestsurv$SACI13_6==9]<-8 #Dental
+stltestsurv$medaptcantype6[stltestsurv$SACI13_6==10]<-9 #Eyecare
+stltestsurv$medaptcantype6[stltestsurv$SACI13_6==11]<-10 #Other appointment
+stltestsurv$medaptcantype6[stltestsurv$SACI13_6==77]<-11 #Unsure
+stltestsurv$medaptcantype6<-factor(stltestsurv$medaptcantype6, levels=c(0:11), labels=c("Cancer screening includng colonoscopy, mammogram, or pap smear", "Primary Care", "Elective surgery or procedure", "Mental health", "Dermatology", "Oncology", "Other specialty care (such as cardiology, endocrinology, urology)", "Physical therapy", "Dental", "Eyecare", "Other appointment", "Unsure"))
+
+table(stltestsurv$medaptcantype6)
+
+#combined variable for cancer screening
+stltestsurv$medaptcantype_comb_canscreen<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" &
+(stltestsurv$medaptcantype1=="Cancer screening includng colonoscopy, mammogram, or pap smear"|
+stltestsurv$medaptcantype2=="Cancer screening includng colonoscopy, mammogram, or pap smear"|
+stltestsurv$medaptcantype3=="Cancer screening includng colonoscopy, mammogram, or pap smear"|
+stltestsurv$medaptcantype4=="Cancer screening includng colonoscopy, mammogram, or pap smear"|
+stltestsurv$medaptcantype5=="Cancer screening includng colonoscopy, mammogram, or pap smear"|
+stltestsurv$medaptcantype6=="Cancer screening includng colonoscopy, mammogram, or pap smear"), 1, 0)
+table(stltestsurv$medaptcan)
+table(stltestsurv$medaptcan, stltestsurv$medaptcantype_comb_canscreen, useNA="always")
+
+stltestsurv$medaptcantype_comb_canscreen<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" & is.na(stltestsurv$medaptcantype_comb_canscreen), 0, stltestsurv$medaptcantype_comb_canscreen)
+
+stltestsurv$medaptcantype_comb_canscreen<-factor(stltestsurv$medaptcantype_comb_canscreen, levels=c(1:0), labels=c("Cancer screening cancelled", "Cancer screening not cancelled"))
+table(stltestsurv$medaptcantype_comb_canscreen, useNA="always")
+table(stltestsurv$medaptcan, useNA="always")
+
+#combined variable for Primary Care
+stltestsurv$medaptcantype_comb_PC<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" &
+                                                  (stltestsurv$medaptcantype1=="Primary Care"|
+                                                   stltestsurv$medaptcantype2=="Primary Care"|
+                                                   stltestsurv$medaptcantype3=="Primary Care"|
+                                                   stltestsurv$medaptcantype4=="Primary Care"|
+                                                   stltestsurv$medaptcantype5=="Primary Care"|
+                                                   stltestsurv$medaptcantype6=="Primary Care"), 1, 0)
+
+stltestsurv$medaptcantype_comb_PC<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" & is.na(stltestsurv$medaptcantype_comb_PC), 0, stltestsurv$medaptcantype_comb_PC)
+
+stltestsurv$medaptcantype_comb_PC<-factor(stltestsurv$medaptcantype_comb_PC, levels=c(1:0), labels=c("Primary Care cancelled", "Primary Care not cancelled"))
+table(stltestsurv$medaptcantype_comb_PC)
+
+
+#combined variable for Elective Surgery or Procedure
+stltestsurv$medaptcantype_comb_ESP<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" &
+                                                  (stltestsurv$medaptcantype1=="Elective surgery or procedure"|
+                                                   stltestsurv$medaptcantype2=="Elective surgery or procedure"|
+                                                   stltestsurv$medaptcantype3=="Elective surgery or procedure"|
+                                                   stltestsurv$medaptcantype4=="Elective surgery or procedure"|
+                                                   stltestsurv$medaptcantype5=="Elective surgery or procedure"|
+                                                   stltestsurv$medaptcantype6=="Elective surgery or procedure"), 1, 0)
+
+stltestsurv$medaptcantype_comb_ESP<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" & is.na(stltestsurv$medaptcantype_comb_ESP), 0, stltestsurv$medaptcantype_comb_ESP)
+
+stltestsurv$medaptcantype_comb_ESP<-factor(stltestsurv$medaptcantype_comb_ESP, levels=c(1:0), labels=c("Elective surgery or procedure cancelled", "Elective surgery or procedure not cancelled"))
+table(stltestsurv$medaptcantype_comb_ESP)
+
+
+#combined variable for Mental health
+stltestsurv$medaptcantype_comb_MH<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" &
+                                                  (stltestsurv$medaptcantype1=="Mental health"|
+                                                   stltestsurv$medaptcantype2=="Mental health"|
+                                                   stltestsurv$medaptcantype3=="Mental health"|
+                                                   stltestsurv$medaptcantype4=="Mental health"|
+                                                   stltestsurv$medaptcantype5=="Mental health"|
+                                                   stltestsurv$medaptcantype6=="Mental health"), 1, 0)
+
+stltestsurv$medaptcantype_comb_MH<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" & is.na(stltestsurv$medaptcantype_comb_MH), 0, stltestsurv$medaptcantype_comb_MH)
+
+stltestsurv$medaptcantype_comb_MH<-factor(stltestsurv$medaptcantype_comb_MH, levels=c(1:0), labels=c("Mental health cancelled", "Mental health not cancelled"))
+table(stltestsurv$medaptcantype_comb_MH)
+
+#combined variable for Dermatology
+stltestsurv$medaptcantype_comb_derm<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" &
+                                                  (stltestsurv$medaptcantype1=="Dermatology"|
+                                                   stltestsurv$medaptcantype2=="Dermatology"|
+                                                   stltestsurv$medaptcantype3=="Dermatology"|
+                                                   stltestsurv$medaptcantype4=="Dermatology"|
+                                                   stltestsurv$medaptcantype5=="Dermatology"|
+                                                   stltestsurv$medaptcantype6=="Dermatology"), 1, 0)
+
+stltestsurv$medaptcantype_comb_derm<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" & is.na(stltestsurv$medaptcantype_comb_derm), 0, stltestsurv$medaptcantype_comb_derm)
+
+stltestsurv$medaptcantype_comb_derm<-factor(stltestsurv$medaptcantype_comb_derm, levels=c(1:0), labels=c("Dermatology cancelled", "Dermatology not cancelled"))
+table(stltestsurv$medaptcantype_comb_derm)
+
+
+#combined variable for Oncology
+stltestsurv$medaptcantype_comb_onc<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" &
+                                                  (stltestsurv$medaptcantype1=="Oncology"|
+                                                   stltestsurv$medaptcantype2=="Oncology"|
+                                                   stltestsurv$medaptcantype3=="Oncology"|
+                                                   stltestsurv$medaptcantype4=="Oncology"|
+                                                   stltestsurv$medaptcantype5=="Oncology"|
+                                                   stltestsurv$medaptcantype6=="Oncology"), 1, 0)
+
+stltestsurv$medaptcantype_comb_onc<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" & is.na(stltestsurv$medaptcantype_comb_onc), 0, stltestsurv$medaptcantype_comb_onc)
+
+stltestsurv$medaptcantype_comb_onc<-factor(stltestsurv$medaptcantype_comb_onc, levels=c(1:0), labels=c("Oncology cancelled", "Oncology not cancelled"))
+table(stltestsurv$medaptcantype_comb_onc)
+
+# combined variable for Other specialty care (such as cardiology, endocrinology, urology)
+stltestsurv$medaptcantype_comb_othspe<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" &
+                                                  (stltestsurv$medaptcantype1=="Other specialty care (such as cardiology, endocrinology, urology)"|
+                                                   stltestsurv$medaptcantype2=="Other specialty care (such as cardiology, endocrinology, urology)"|
+                                                   stltestsurv$medaptcantype3=="Other specialty care (such as cardiology, endocrinology, urology)"|
+                                                   stltestsurv$medaptcantype4=="Other specialty care (such as cardiology, endocrinology, urology)"|
+                                                   stltestsurv$medaptcantype5=="Other specialty care (such as cardiology, endocrinology, urology)"|
+                                                   stltestsurv$medaptcantype6=="Other specialty care (such as cardiology, endocrinology, urology)"), 1, 0)
+
+stltestsurv$medaptcantype_comb_othspe<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" & is.na(stltestsurv$medaptcantype_comb_othspe), 0, stltestsurv$medaptcantype_comb_othspe)
+
+stltestsurv$medaptcantype_comb_othspe<-factor(stltestsurv$medaptcantype_comb_othspe, levels=c(1:0), labels=c("Other specialty care (such as cardiology, endocrinology, urology) cancelled", "Other specialty care (such as cardiology, endocrinology, urology) not cancelled"))
+table(stltestsurv$medaptcantype_comb_othspe)
+ 
+# combined variable for Physical therapy
+stltestsurv$medaptcantype_comb_PT<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" &
+                                                  (stltestsurv$medaptcantype1=="Physical therapy"|
+                                                   stltestsurv$medaptcantype2=="Physical therapy"|
+                                                   stltestsurv$medaptcantype3=="Physical therapy"|
+                                                   stltestsurv$medaptcantype4=="Physical therapy"|
+                                                   stltestsurv$medaptcantype5=="Physical therapy"|
+                                                   stltestsurv$medaptcantype6=="Physical therapy"), 1, 0)
+
+stltestsurv$medaptcantype_comb_PT<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" & is.na(stltestsurv$medaptcantype_comb_PT), 0, stltestsurv$medaptcantype_comb_PT)
+
+stltestsurv$medaptcantype_comb_PT<-factor(stltestsurv$medaptcantype_comb_PT, levels=c(1:0), labels=c("Physical therapy cancelled", "Physical therapy not cancelled"))
+table(stltestsurv$medaptcantype_comb_PT)
+
+
+# combined variable for Dental
+stltestsurv$medaptcantype_comb_dent<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" &
+                                                  (stltestsurv$medaptcantype1=="Dental"|
+                                                   stltestsurv$medaptcantype2=="Dental"|
+                                                   stltestsurv$medaptcantype3=="Dental"|
+                                                   stltestsurv$medaptcantype4=="Dental"|
+                                                   stltestsurv$medaptcantype5=="Dental"|
+                                                   stltestsurv$medaptcantype6=="Dental"), 1, 0)
+stltestsurv$medaptcantype_comb_dent<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" & is.na(stltestsurv$medaptcantype_comb_dent), 0, stltestsurv$medaptcantype_comb_dent)
+
+stltestsurv$medaptcantype_comb_dent<-factor(stltestsurv$medaptcantype_comb_dent, levels=c(1:0), labels=c("Dental cancelled", "Dental not cancelled"))
+table(stltestsurv$medaptcantype_comb_dent)
+
+# combined variable for Eyecare
+stltestsurv$medaptcantype_comb_eye<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" &
+                                                  (stltestsurv$medaptcantype1=="Eyecare"|
+                                                   stltestsurv$medaptcantype2=="Eyecare"|
+                                                   stltestsurv$medaptcantype3=="Eyecare"|
+                                                   stltestsurv$medaptcantype4=="Eyecare"|
+                                                   stltestsurv$medaptcantype5=="Eyecare"|
+                                                   stltestsurv$medaptcantype6=="Eyecare"), 1, 0)
+
+stltestsurv$medaptcantype_comb_eye<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" & is.na(stltestsurv$medaptcantype_comb_eye), 0, stltestsurv$medaptcantype_comb_eye)
+
+stltestsurv$medaptcantype_comb_eye<-factor(stltestsurv$medaptcantype_comb_eye, levels=c(1:0), labels=c("Eyecare cancelled", "Eyecare not cancelled"))
+table(stltestsurv$medaptcantype_comb_eye)
+
+# combined variable for Other appointment
+stltestsurv$medaptcantype_comb_oth<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" &
+                                                  (stltestsurv$medaptcantype1=="Other appointment"|
+                                                   stltestsurv$medaptcantype2=="Other appointment"|
+                                                   stltestsurv$medaptcantype3=="Other appointment"|
+                                                   stltestsurv$medaptcantype4=="Other appointment"|
+                                                   stltestsurv$medaptcantype5=="Other appointment"|
+                                                   stltestsurv$medaptcantype6=="Other appointment"), 1, 0)
+
+stltestsurv$medaptcantype_comb_oth<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" & is.na(stltestsurv$medaptcantype_comb_oth), 0, stltestsurv$medaptcantype_comb_oth)
+
+stltestsurv$medaptcantype_comb_oth<-factor(stltestsurv$medaptcantype_comb_oth, levels=c(1:0), labels=c("Other appointment cancelled", "Other appointment not cancelled"))
+table(stltestsurv$medaptcantype_comb_oth)
+
+
+# combined variable for Unsure  appointment
+stltestsurv$medaptcantype_comb_unsure<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" &
+                                                  (stltestsurv$medaptcantype1=="Unsure"|
+                                                   stltestsurv$medaptcantype2=="Unsure"|
+                                                   stltestsurv$medaptcantype3=="Unsure"|
+                                                   stltestsurv$medaptcantype4=="Unsure"|
+                                                   stltestsurv$medaptcantype5=="Unsure"|
+                                                   stltestsurv$medaptcantype6=="Unsure"), 1, 0)
+
+stltestsurv$medaptcantype_comb_unsure<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled" & is.na(stltestsurv$medaptcantype_comb_unsure), 0, stltestsurv$medaptcantype_comb_unsure)
+
+stltestsurv$medaptcantype_comb_unsure<-factor(stltestsurv$medaptcantype_comb_unsure, levels=c(1:0), labels=c("Unsure cancelled", "Unsured not cancelled"))
+table(stltestsurv$medaptcantype_comb_unsure)
+```
+
+## Data Management - Health Services 2
+```{r}
+#format SACI14
+stltestsurv$medaptcan_p<-ifelse(stltestsurv$SACI14_I==1, 1, 0) #Participant cancelled or delayed appointments
+
+stltestsurv$medaptcan_p<-factor(stltestsurv$medaptcan_p, levels=c(1:0), labels=c("Participant cancelled or delayed appointments", "Participant did not/unsure cancel or delay appointments"))
+
+table(stltestsurv$medaptcan_p)
+table(stltestsurv$SACI14)
+
+#format SACI15_1
+stltestsurv$medaptcantype1p[stltestsurv$SACI15_1==1]<-0 #Cancer screening includng colonoscopy, mammogram, or pap smear
+stltestsurv$medaptcantype1p[stltestsurv$SACI15_1==2]<-1 #Primary care
+stltestsurv$medaptcantype1p[stltestsurv$SACI15_1==3]<-2 #Elective surgery or procedure
+stltestsurv$medaptcantype1p[stltestsurv$SACI15_1==4]<-3 #Mental health
+stltestsurv$medaptcantype1p[stltestsurv$SACI15_1==5]<-4 #Dermatology
+stltestsurv$medaptcantype1p[stltestsurv$SACI15_1==6]<-5 #Oncology
+stltestsurv$medaptcantype1p[stltestsurv$SACI15_1==7]<-6 #Other specialty care (such as cardiology, endocrinology, urology)
+stltestsurv$medaptcantype1p[stltestsurv$SACI15_1==8]<-7 #Physical therapy
+stltestsurv$medaptcantype1p[stltestsurv$SACI15_1==9]<-8 #Dental
+stltestsurv$medaptcantype1p[stltestsurv$SACI15_1==10]<-9 #Eyecare
+stltestsurv$medaptcantype1p[stltestsurv$SACI15_1==11]<-10 #Other appointment
+stltestsurv$medaptcantype1p[stltestsurv$SACI15_1==77]<-11 #Unsure
+stltestsurv$medaptcantype1p<-factor(stltestsurv$medaptcantype1p, levels=c(0:11), labels=c("Cancer screening includng colonoscopy, mammogram, or pap smear", "Primary Care", "Elective surgery or procedure", "Mental health", "Dermatology", "Oncology", "Other specialty care (such as cardiology, endocrinology, urology)", "Physical therapy", "Dental", "Eyecare", "Other appointment", "Unsure"))
+
+table(stltestsurv$medaptcantype1p)
+
+#format SACI15_2
+stltestsurv$medaptcantype2p[stltestsurv$SACI15_2==1]<-0 #Cancer screening includng colonoscopy, mammogram, or pap smear
+stltestsurv$medaptcantype2p[stltestsurv$SACI15_2==2]<-1 #Primary care
+stltestsurv$medaptcantype2p[stltestsurv$SACI15_2==3]<-2 #Elective surgery or procedure
+stltestsurv$medaptcantype2p[stltestsurv$SACI15_2==4]<-3 #Mental health
+stltestsurv$medaptcantype2p[stltestsurv$SACI15_2==5]<-4 #Dermatology
+stltestsurv$medaptcantype2p[stltestsurv$SACI15_2==6]<-5 #Oncology
+stltestsurv$medaptcantype2p[stltestsurv$SACI15_2==7]<-6 #Other specialty care (such as cardiology, endocrinology, urology)
+stltestsurv$medaptcantype2p[stltestsurv$SACI15_2==8]<-7 #Physical therapy
+stltestsurv$medaptcantype2p[stltestsurv$SACI15_2==9]<-8 #Dental
+stltestsurv$medaptcantype2p[stltestsurv$SACI15_2==10]<-9 #Eyecare
+stltestsurv$medaptcantype2p[stltestsurv$SACI15_2==11]<-10 #Other appointment
+stltestsurv$medaptcantype2p[stltestsurv$SACI15_2==77]<-11 #Unsure
+stltestsurv$medaptcantype2p<-factor(stltestsurv$medaptcantype2p, levels=c(0:11), labels=c("Cancer screening includng colonoscopy, mammogram, or pap smear", "Primary Care", "Elective surgery or procedure", "Mental health", "Dermatology", "Oncology", "Other specialty care (such as cardiology, endocrinology, urology)", "Physical therapy", "Dental", "Eyecare", "Other appointment", "Unsure"))
+
+table(stltestsurv$medaptcantype2p)
+
+#format SACI15_3
+stltestsurv$medaptcantype3p[stltestsurv$SACI15_3==1]<-0 #Cancer screening includng colonoscopy, mammogram, or pap smear
+stltestsurv$medaptcantype3p[stltestsurv$SACI15_3==2]<-1 #Primary care
+stltestsurv$medaptcantype3p[stltestsurv$SACI15_3==3]<-2 #Elective surgery or procedure
+stltestsurv$medaptcantype3p[stltestsurv$SACI15_3==4]<-3 #Mental health
+stltestsurv$medaptcantype3p[stltestsurv$SACI15_3==5]<-4 #Dermatology
+stltestsurv$medaptcantype3p[stltestsurv$SACI15_3==6]<-5 #Oncology
+stltestsurv$medaptcantype3p[stltestsurv$SACI15_3==7]<-6 #Other specialty care (such as cardiology, endocrinology, urology)
+stltestsurv$medaptcantype3p[stltestsurv$SACI15_3==8]<-7 #Physical therapy
+stltestsurv$medaptcantype3p[stltestsurv$SACI15_3==9]<-8 #Dental
+stltestsurv$medaptcantype3p[stltestsurv$SACI15_3==10]<-9 #Eyecare
+stltestsurv$medaptcantype3p[stltestsurv$SACI15_3==11]<-10 #Other appointment
+stltestsurv$medaptcantype3p[stltestsurv$SACI15_3==77]<-11 #Unsure
+stltestsurv$medaptcantype3p<-factor(stltestsurv$medaptcantype3p, levels=c(0:11), labels=c("Cancer screening includng colonoscopy, mammogram, or pap smear", "Primary Care", "Elective surgery or procedure", "Mental health", "Dermatology", "Oncology", "Other specialty care (such as cardiology, endocrinology, urology)", "Physical therapy", "Dental", "Eyecare", "Other appointment", "Unsure"))
+
+table(stltestsurv$medaptcantype3p)
+
+#format SACI15_4
+stltestsurv$medaptcantype4p[stltestsurv$SACI15_4==1]<-0 #Cancer screening includng colonoscopy, mammogram, or pap smear
+stltestsurv$medaptcantype4p[stltestsurv$SACI15_4==2]<-1 #Primary care
+stltestsurv$medaptcantype4p[stltestsurv$SACI15_4==3]<-2 #Elective surgery or procedure
+stltestsurv$medaptcantype4p[stltestsurv$SACI15_4==4]<-3 #Mental health
+stltestsurv$medaptcantype4p[stltestsurv$SACI15_4==5]<-4 #Dermatology
+stltestsurv$medaptcantype4p[stltestsurv$SACI15_4==6]<-5 #Oncology
+stltestsurv$medaptcantype4p[stltestsurv$SACI15_4==7]<-6 #Other specialty care (such as cardiology, endocrinology, urology)
+stltestsurv$medaptcantype4p[stltestsurv$SACI15_4==8]<-7 #Physical therapy
+stltestsurv$medaptcantype4p[stltestsurv$SACI15_4==9]<-8 #Dental
+stltestsurv$medaptcantype4p[stltestsurv$SACI15_4==10]<-9 #Eyecare
+stltestsurv$medaptcantype4p[stltestsurv$SACI15_4==11]<-10 #Other appointment
+stltestsurv$medaptcantype4p[stltestsurv$SACI15_4==77]<-10 #Unsure
+stltestsurv$medaptcantype4p<-factor(stltestsurv$medaptcantype4p, levels=c(0:11), labels=c("Cancer screening includng colonoscopy, mammogram, or pap smear", "Primary Care", "Elective surgery or procedure", "Mental health", "Dermatology", "Oncology", "Other specialty care (such as cardiology, endocrinology, urology)", "Physical therapy", "Dental", "Eyecare", "Other appointment", "Unsure"))
+
+table(stltestsurv$medaptcantype4p)
+
+#format SACI15_5
+stltestsurv$medaptcantype5p[stltestsurv$SACI15_5==1]<-0 #Cancer screening includng colonoscopy, mammogram, or pap smear
+stltestsurv$medaptcantype5p[stltestsurv$SACI15_5==2]<-1 #Primary care
+stltestsurv$medaptcantype5p[stltestsurv$SACI15_5==3]<-2 #Elective surgery or procedure
+stltestsurv$medaptcantype5p[stltestsurv$SACI15_5==4]<-3 #Mental health
+stltestsurv$medaptcantype5p[stltestsurv$SACI15_5==5]<-4 #Dermatology
+stltestsurv$medaptcantype5p[stltestsurv$SACI15_5==6]<-5 #Oncology
+stltestsurv$medaptcantype5p[stltestsurv$SACI15_5==7]<-6 #Other specialty care (such as cardiology, endocrinology, urology)
+stltestsurv$medaptcantype5p[stltestsurv$SACI15_5==8]<-7 #Physical therapy
+stltestsurv$medaptcantype5p[stltestsurv$SACI15_5==9]<-8 #Dental
+stltestsurv$medaptcantype5p[stltestsurv$SACI15_5==10]<-9 #Eyecare
+stltestsurv$medaptcantype5p[stltestsurv$SACI15_5==11]<-10 #Other appointment
+stltestsurv$medaptcantype5p[stltestsurv$SACI15_5==77]<-11 #Unsure
+
+stltestsurv$medaptcantype5p<-factor(stltestsurv$medaptcantype5p, levels=c(0:11), labels=c("Cancer screening includng colonoscopy, mammogram, or pap smear", "Primary Care", "Elective surgery or procedure", "Mental health", "Dermatology", "Oncology", "Other specialty care (such as cardiology, endocrinology, urology)", "Physical therapy", "Dental", "Eyecare", "Other appointment", "Unsure"))
+
+table(stltestsurv$medaptcantype5p)
+
+#format SACI15_6
+stltestsurv$medaptcantype6p[stltestsurv$SACI15_6==1]<-0 #Cancer screening includng colonoscopy, mammogram, or pap smear
+stltestsurv$medaptcantype6p[stltestsurv$SACI15_6==2]<-1 #Primary care
+stltestsurv$medaptcantype6p[stltestsurv$SACI15_6==3]<-2 #Elective surgery or procedure
+stltestsurv$medaptcantype6p[stltestsurv$SACI15_6==4]<-3 #Mental health
+stltestsurv$medaptcantype6p[stltestsurv$SACI15_6==5]<-4 #Dermatology
+stltestsurv$medaptcantype6p[stltestsurv$SACI15_6==6]<-5 #Oncology
+stltestsurv$medaptcantype6p[stltestsurv$SACI15_6==7]<-6 #Other specialty care (such as cardiology, endocrinology, urology)
+stltestsurv$medaptcantype6p[stltestsurv$SACI15_6==8]<-7 #Physical therapy
+stltestsurv$medaptcantype6p[stltestsurv$SACI15_6==9]<-8 #Dental
+stltestsurv$medaptcantype6p[stltestsurv$SACI15_6==10]<-9 #Eyecare
+stltestsurv$medaptcantype6p[stltestsurv$SACI15_6==11]<-10 #Other appointment
+stltestsurv$medaptcantype6p[stltestsurv$SACI15_6==77]<-11 #Other appointment
+stltestsurv$medaptcantype6p<-factor(stltestsurv$medaptcantype6p, levels=c(0:11), labels=c("Cancer screening includng colonoscopy, mammogram, or pap smear", "Primary Care", "Elective surgery or procedure", "Mental health", "Dermatology", "Oncology", "Other specialty care (such as cardiology, endocrinology, urology)", "Physical therapy", "Dental", "Eyecare", "Other appointment", "Unsure"))
+
+table(stltestsurv$medaptcantype6p)
+
+
+#combined variable for cancer screening
+stltestsurv$medaptcantype_comb_canscreenp<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" &
+                                                  (stltestsurv$medaptcantype1p=="Cancer screening includng colonoscopy, mammogram, or pap smear"|
+                                                   stltestsurv$medaptcantype2p=="Cancer screening includng colonoscopy, mammogram, or pap smear"|
+                                                   stltestsurv$medaptcantype3p=="Cancer screening includng colonoscopy, mammogram, or pap smear"|
+                                                   stltestsurv$medaptcantype4p=="Cancer screening includng colonoscopy, mammogram, or pap smear"|
+                                                   stltestsurv$medaptcantype5p=="Cancer screening includng colonoscopy, mammogram, or pap smear"|
+                                                   stltestsurv$medaptcantype6p=="Cancer screening includng colonoscopy, mammogram, or pap smear"), 1, 0)
+
+
+stltestsurv$medaptcantype_comb_canscreenp<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" & is.na(stltestsurv$medaptcantype_comb_canscreenp), 0, stltestsurv$medaptcantype_comb_canscreenp)
+
+stltestsurv$medaptcantype_comb_canscreenp<-factor(stltestsurv$medaptcantype_comb_canscreenp, levels=c(1:0), labels=c("Participant Cancer screening cancelled", "Participant Cancer screening not cancelled"))
+table(stltestsurv$medaptcantype_comb_canscreenp)
+
+#combined variable for Primary Care
+
+stltestsurv$medaptcantype_comb_PCp<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" &
+                                                  (stltestsurv$medaptcantype1p=="Primary Care"|
+                                                   stltestsurv$medaptcantype2p=="Primary Care"|
+                                                   stltestsurv$medaptcantype3p=="Primary Care"|
+                                                   stltestsurv$medaptcantype4p=="Primary Care"|
+                                                   stltestsurv$medaptcantype5p=="Primary Care"|
+                                                   stltestsurv$medaptcantype6p=="Primary Care"), 1, 0)
+
+stltestsurv$medaptcantype_comb_PCp<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" & is.na(stltestsurv$medaptcantype_comb_PCp), 0, stltestsurv$medaptcantype_comb_PCp)
+
+stltestsurv$medaptcantype_comb_PCp<-factor(stltestsurv$medaptcantype_comb_PCp, levels=c(1:0), labels=c("Primary Care cancelled", "Primary Care not cancelled"))
+table(stltestsurv$medaptcantype_comb_PCp)
+
+#combined variable for Elective Surgery or Procedure
+stltestsurv$medaptcantype_comb_ESPp<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" &
+                                                  (stltestsurv$medaptcantype1p=="Elective surgery or procedure"|
+                                                   stltestsurv$medaptcantype2p=="Elective surgery or procedure"|
+                                                   stltestsurv$medaptcantype3p=="Elective surgery or procedure"|
+                                                   stltestsurv$medaptcantype4p=="Elective surgery or procedure"|
+                                                   stltestsurv$medaptcantype5p=="Elective surgery or procedure"|
+                                                   stltestsurv$medaptcantype6p=="Elective surgery or procedure"), 1, 0)
+
+stltestsurv$medaptcantype_comb_ESPp<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" & is.na(stltestsurv$medaptcantype_comb_ESPp), 0, stltestsurv$medaptcantype_comb_ESPp)
+
+stltestsurv$medaptcantype_comb_ESPp<-factor(stltestsurv$medaptcantype_comb_ESPp, levels=c(1:0), labels=c("Elective surgery or procedure cancelled", "Elective surgery or procedure not cancelled"))
+table(stltestsurv$medaptcantype_comb_ESPp)
+
+
+#combined variable for Mental health
+stltestsurv$medaptcantype_comb_MHp<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" &
+                                                  (stltestsurv$medaptcantype1p=="Mental health"|
+                                                   stltestsurv$medaptcantype2p=="Mental health"|
+                                                   stltestsurv$medaptcantype3p=="Mental health"|
+                                                   stltestsurv$medaptcantype4p=="Mental health"|
+                                                   stltestsurv$medaptcantype5p=="Mental health"|
+                                                   stltestsurv$medaptcantype6p=="Mental health"), 1, 0)
+
+stltestsurv$medaptcantype_comb_MHp<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" & is.na(stltestsurv$medaptcantype_comb_MHp), 0, stltestsurv$medaptcantype_comb_MHp)
+
+stltestsurv$medaptcantype_comb_MHp<-factor(stltestsurv$medaptcantype_comb_MHp, levels=c(1:0), labels=c("Mental health cancelled", "Mental health not cancelled"))
+table(stltestsurv$medaptcantype_comb_MHp)
+
+#combined variable for Dermatology
+stltestsurv$medaptcantype_comb_dermp<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" &
+                                                  (stltestsurv$medaptcantype1p=="Dermatology"|
+                                                   stltestsurv$medaptcantype2p=="Dermatology"|
+                                                   stltestsurv$medaptcantype3p=="Dermatology"|
+                                                   stltestsurv$medaptcantype4p=="Dermatology"|
+                                                   stltestsurv$medaptcantype5p=="Dermatology"|
+                                                   stltestsurv$medaptcantype6p=="Dermatology"), 1, 0)
+
+stltestsurv$medaptcantype_comb_dermp<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" & is.na(stltestsurv$medaptcantype_comb_dermp), 0, stltestsurv$medaptcantype_comb_dermp)
+
+stltestsurv$medaptcantype_comb_dermp<-factor(stltestsurv$medaptcantype_comb_dermp, levels=c(1:0), labels=c("Dermatology cancelled", "Dermatology not cancelled"))
+table(stltestsurv$medaptcantype_comb_dermp)
+
+#combined variable for Oncology
+stltestsurv$medaptcantype_comb_oncp<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" &
+                                                  (stltestsurv$medaptcantype1p=="Oncology"|
+                                                   stltestsurv$medaptcantype2p=="Oncology"|
+                                                   stltestsurv$medaptcantype3p=="Oncology"|
+                                                   stltestsurv$medaptcantype4p=="Oncology"|
+                                                   stltestsurv$medaptcantype5p=="Oncology"|
+                                                   stltestsurv$medaptcantype6p=="Oncology"), 1, 0)
+
+stltestsurv$medaptcantype_comb_oncp<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" & is.na(stltestsurv$medaptcantype_comb_oncp), 0, stltestsurv$medaptcantype_comb_oncp)
+
+stltestsurv$medaptcantype_comb_oncp<-factor(stltestsurv$medaptcantype_comb_oncp, levels=c(1:0), labels=c("Oncology cancelled", "Oncology not cancelled"))
+table(stltestsurv$medaptcantype_comb_oncp)
+
+# combined variable for Other specialty care (such as cardiology, endocrinology, urology)
+stltestsurv$medaptcantype_comb_othspep<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" &
+                                                  (stltestsurv$medaptcantype1p=="Other specialty care (such as cardiology, endocrinology, urology)"|
+                                                   stltestsurv$medaptcantype2p=="Other specialty care (such as cardiology, endocrinology, urology)"|
+                                                   stltestsurv$medaptcantype3p=="Other specialty care (such as cardiology, endocrinology, urology)"|
+                                                   stltestsurv$medaptcantype4p=="Other specialty care (such as cardiology, endocrinology, urology)"|
+                                                   stltestsurv$medaptcantype5p=="Other specialty care (such as cardiology, endocrinology, urology)"|
+                                                   stltestsurv$medaptcantype6p=="Other specialty care (such as cardiology, endocrinology, urology)"), 1, 0)
+
+stltestsurv$medaptcantype_comb_othspep<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" & is.na(stltestsurv$medaptcantype_comb_othspep), 0, stltestsurv$medaptcantype_comb_othspep)
+
+stltestsurv$medaptcantype_comb_othspep<-factor(stltestsurv$medaptcantype_comb_othspep, levels=c(1:0), labels=c("Other specialty care (such as cardiology, endocrinology, urology) cancelled", "Other specialty care (such as cardiology, endocrinology, urology) not cancelled"))
+table(stltestsurv$medaptcantype_comb_othspep)
+ 
+# combined variable for Physical therapy
+stltestsurv$medaptcantype_comb_PTp<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" &
+                                                  (stltestsurv$medaptcantype1p=="Physical therapy"|
+                                                   stltestsurv$medaptcantype2p=="Physical therapy"|
+                                                   stltestsurv$medaptcantype3p=="Physical therapy"|
+                                                   stltestsurv$medaptcantype4p=="Physical therapy"|
+                                                   stltestsurv$medaptcantype5p=="Physical therapy"|
+                                                   stltestsurv$medaptcantype6p=="Physical therapy"), 1, 0)
+
+stltestsurv$medaptcantype_comb_PTp<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" & is.na(stltestsurv$medaptcantype_comb_PTp), 0, stltestsurv$medaptcantype_comb_PTp)
+
+stltestsurv$medaptcantype_comb_PTp<-factor(stltestsurv$medaptcantype_comb_PTp, levels=c(1:0), labels=c("Physical therapy cancelled", "Physical therapy not cancelled"))
+table(stltestsurv$medaptcantype_comb_PTp)
+
+
+# combined variable for Dental
+stltestsurv$medaptcantype_comb_dentp<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" &
+                                                  (stltestsurv$medaptcantype1p=="Dental"|
+                                                   stltestsurv$medaptcantype2p=="Dental"|
+                                                   stltestsurv$medaptcantype3p=="Dental"|
+                                                   stltestsurv$medaptcantype4p=="Dental"|
+                                                   stltestsurv$medaptcantype5p=="Dental"|
+                                                   stltestsurv$medaptcantype6p=="Dental"), 1, 0)
+
+stltestsurv$medaptcantype_comb_dentp<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" & is.na(stltestsurv$medaptcantype_comb_dentp), 0, stltestsurv$medaptcantype_comb_dentp)
+
+stltestsurv$medaptcantype_comb_dentp<-factor(stltestsurv$medaptcantype_comb_dentp, levels=c(1:0), labels=c("Dental cancelled", "Dental not cancelled"))
+table(stltestsurv$medaptcantype_comb_dentp)
+
+# combined variable for Eyecare
+stltestsurv$medaptcantype_comb_eyep<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" &
+                                                  (stltestsurv$medaptcantype1p=="Eyecare"|
+                                                   stltestsurv$medaptcantype2p=="Eyecare"|
+                                                   stltestsurv$medaptcantype3p=="Eyecare"|
+                                                   stltestsurv$medaptcantype4p=="Eyecare"|
+                                                   stltestsurv$medaptcantype5p=="Eyecare"|
+                                                   stltestsurv$medaptcantype6p=="Eyecare"), 1, 0)
+
+stltestsurv$medaptcantype_comb_eyep<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" & is.na(stltestsurv$medaptcantype_comb_eyep), 0, stltestsurv$medaptcantype_comb_eyep)
+
+stltestsurv$medaptcantype_comb_eyep<-factor(stltestsurv$medaptcantype_comb_eyep, levels=c(1:0), labels=c("Eyecare cancelled", "Eyecare not cancelled"))
+table(stltestsurv$medaptcantype_comb_eyep)
+
+# combined variable for Other appointment
+stltestsurv$medaptcantype_comb_othp<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" &
+                                                  (stltestsurv$medaptcantype1p=="Other appointment"|
+                                                   stltestsurv$medaptcantype2p=="Other appointment"|
+                                                   stltestsurv$medaptcantype3p=="Other appointment"|
+                                                   stltestsurv$medaptcantype4p=="Other appointment"|
+                                                   stltestsurv$medaptcantype5p=="Other appointment"|
+                                                   stltestsurv$medaptcantype6p=="Other appointment"), 1, 0)
+
+stltestsurv$medaptcantype_comb_othp<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" & is.na(stltestsurv$medaptcantype_comb_othp), 0, stltestsurv$medaptcantype_comb_othp)
+
+stltestsurv$medaptcantype_comb_othp<-factor(stltestsurv$medaptcantype_comb_othp, levels=c(1:0), labels=c("Other appointment cancelled", "Other appointment not cancelled"))
+table(stltestsurv$medaptcantype_comb_othp)
+
+# combined variable for Unsure
+stltestsurv$medaptcantype_comb_unsurep<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" &
+                                                  (stltestsurv$medaptcantype1p=="Unsure"|
+                                                   stltestsurv$medaptcantype2p=="Unsure"|
+                                                   stltestsurv$medaptcantype3p=="Unsure"|
+                                                   stltestsurv$medaptcantype4p=="Unsure"|
+                                                   stltestsurv$medaptcantype5p=="Unsure"|
+                                                   stltestsurv$medaptcantype6p=="Unsure"), 1, 0)
+
+stltestsurv$medaptcantype_comb_unsurep<-ifelse(stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments" & is.na(stltestsurv$medaptcantype_comb_unsurep), 0, stltestsurv$medaptcantype_comb_unsurep)
+
+stltestsurv$medaptcantype_comb_unsurep<-factor(stltestsurv$medaptcantype_comb_unsurep, levels=c(1:0), labels=c("Unsure cancelled", "Unsure not cancelled"))
+table(stltestsurv$medaptcantype_comb_unsurep)
+```
+
+## Combine provider and participant cancellations
+```{r}
+stltestsurv$medaptcan_all<-ifelse(stltestsurv$medaptcan=="Has had appointments cancelled"|stltestsurv$medaptcan_p=="Participant cancelled or delayed appointments", 1,  ifelse(stltestsurv$medaptcan=="Has not/unsure had appointments cancelled" &  stltestsurv$medaptcan_p=="Participant did not/unsure cancel or delay appointments", 0, "NA"))
+
+table(stltestsurv$medaptcan_all, useNA=c("always"))
+
+stltestsurv$medaptcan_all<-factor(stltestsurv$medaptcan_all, levels=c(0:1), labels=c("No deferred care","Deferred care"))
+
+table(stltestsurv$medaptcan_all)
+
+#Cancer Screening
+stltestsurv$medaptcan_all_comb_canscreen<-ifelse(stltestsurv$medaptcantype_comb_canscreen=="Cancer screening cancelled"|stltestsurv$medaptcantype_comb_canscreenp=="Participant Cancer screening cancelled", 1,  0)
+
+stltestsurv$medaptcan_all_comb_canscreen<-factor(stltestsurv$medaptcan_all_comb_canscreen, levels=c(0:1), labels=c("Cancer screening not cancelled","Cancer screening cancelled"))
+
+table(stltestsurv$medaptcan_all_comb_canscreen)
+
+#Primary Care
+stltestsurv$medaptcan_all_comb_PC<-ifelse(stltestsurv$medaptcantype_comb_PC=="Primary Care cancelled"| stltestsurv$medaptcantype_comb_PCp=="Primary Care cancelled", 1,  0)
+
+stltestsurv$medaptcan_all_comb_PC<-factor(stltestsurv$medaptcan_all_comb_PC, levels=c(0:1), labels=c("Primary Care not cancelled","Primary Care cancelled"))
+
+table(stltestsurv$medaptcan_all_comb_PC)
+
+
+# Elective surgery or procedure
+stltestsurv$medaptcan_all_comb_ESP<-ifelse(stltestsurv$medaptcantype_comb_ESP=="Elective surgery or procedure cancelled"|stltestsurv$medaptcantype_comb_ESPp=="Elective surgery or procedure cancelled", 
+1,  0)
+
+stltestsurv$medaptcan_all_comb_ESP<-factor(stltestsurv$medaptcan_all_comb_ESP, levels=c(0:1), labels=c("Elective surgery or procedure not cancelled","Elective surgery or procedure cancelled"))
+
+table(stltestsurv$medaptcan_all_comb_ESP)
+
+# Mental health
+stltestsurv$medaptcan_all_comb_MH<-ifelse(stltestsurv$medaptcantype_comb_MH=="Mental health cancelled"|
+stltestsurv$medaptcantype_comb_MHp=="Mental health cancelled", 1,  0)
+
+stltestsurv$medaptcan_all_comb_MH<-factor(stltestsurv$medaptcan_all_comb_MH, levels=c(0:1), labels=c("Mental health not cancelled","Mental health cancelled"))
+table(stltestsurv$medaptcan_all_comb_MH)
+
+#Dermatology 
+stltestsurv$medaptcan_all_comb_derm<-ifelse(stltestsurv$medaptcantype_comb_derm=="Dermatology cancelled"|stltestsurv$medaptcantype_comb_dermp=="Dermatology cancelled", 1,  0)
+
+stltestsurv$medaptcan_all_comb_derm<-factor(stltestsurv$medaptcan_all_comb_derm, levels=c(0:1), labels=c("Dermatology not cancelled","Dermatology cancelled"))
+table(stltestsurv$medaptcan_all_comb_derm)
+
+#Oncology
+stltestsurv$medaptcan_all_comb_onc<-ifelse(stltestsurv$medaptcantype_comb_onc=="Oncology cancelled"|stltestsurv$medaptcantype_comb_oncp=="Oncology cancelled", 1,  0)
+
+stltestsurv$medaptcan_all_comb_onc<-factor(stltestsurv$medaptcan_all_comb_onc, levels=c(0:1), labels=c("Oncology cancelled","Oncology not cancelled"))
+table(stltestsurv$medaptcan_all_comb_onc)
+
+#Other speciality
+stltestsurv$medaptcan_all_comb_othspe<-ifelse(stltestsurv$medaptcantype_comb_othspe=="Other specialty care (such as cardiology, endocrinology, urology) cancelled"|stltestsurv$medaptcantype_comb_othspep=="Other specialty care (such as cardiology, endocrinology, urology) cancelled", 1,  0)
+
+stltestsurv$medaptcan_all_comb_othspe<-factor(stltestsurv$medaptcan_all_comb_othspe, levels=c(0:1), labels=c("Other specialty care (such as cardiology, endocrinology, urology) not cancelled","Other specialty care (such as cardiology, endocrinology, urology) cancelled"))
+
+table(stltestsurv$medaptcan_all_comb_othspe)
+table(stltestsurv$medaptcantype_comb_othspe)
+table(stltestsurv$medaptcantype_comb_othspep)
+table(othspe=stltestsurv$medaptcantype_comb_othspe,othespep=stltestsurv$medaptcantype_comb_othspep)
+
+#Dental
+stltestsurv$medaptcan_all_comb_dent<-ifelse(stltestsurv$medaptcantype_comb_dent=="Dental cancelled"|stltestsurv$medaptcantype_comb_dentp=="Dental cancelled", 1,  0)
+
+stltestsurv$medaptcan_all_comb_dent<-factor(stltestsurv$medaptcan_all_comb_dent, levels=c(0:1), labels=c("Dental cancelled","Dental not cancelled"))
+
+table(stltestsurv$medaptcan_all_comb_dent)
+
+#Eye
+stltestsurv$medaptcan_all_comb_eye<-ifelse(stltestsurv$medaptcantype_comb_eye=="Eyecare cancelled"|stltestsurv$medaptcantype_comb_eyep=="Eyecare cancelled", 1,  0)
+
+stltestsurv$medaptcan_all_comb_eye<-factor(stltestsurv$medaptcan_all_comb_eye, levels=c(0:1), labels=c("Eyecare not cancelled","Eyecare cancelled"))
+
+table(stltestsurv$medaptcan_all_comb_eye)
+
+#PT
+stltestsurv$medaptcan_all_comb_PT<-ifelse(stltestsurv$medaptcantype_comb_PT=="Physical therapy cancelled"|stltestsurv$medaptcantype_comb_PTp=="Physical therapy cancelled", 1,  0)
+
+stltestsurv$medaptcan_all_comb_PT<-factor(stltestsurv$medaptcan_all_comb_PT, levels=c(0:1), labels=c("Physical therapy not cancelled","Physical therapy cancelled"))
+
+table(stltestsurv$medaptcan_all_comb_PT)
+
+#Other provider
+stltestsurv$medaptcan_all_comb_oth<-ifelse(stltestsurv$medaptcantype_comb_oth=="Other appointment cancelled"|stltestsurv$medaptcantype_comb_othp=="Other appointment cancelled", 1,  0)
+
+stltestsurv$medaptcan_all_comb_oth<-factor(stltestsurv$medaptcan_all_comb_oth, levels=c(0:1), labels=c("Other appointment not cancelled","Other appointment cancelled"))
+
+table(stltestsurv$medaptcan_all_comb_oth)
+
+#unsure 
+stltestsurv$medaptcan_all_comb_unsure<-ifelse(stltestsurv$medaptcantype_comb_unsure=="Unsure cancelled"|stltestsurv$medaptcantype_comb_unsurep=="Unsure cancelled", 1,  0)
+
+stltestsurv$medaptcan_all_comb_unsure<-factor(stltestsurv$medaptcan_all_comb_unsure, levels=c(0:1), labels=c("Unsure not cancelled","Unsure cancelled"))
+
+table(stltestsurv$medaptcan_all_comb_unsure)
+
+```
+
+## Data Management - Health Services 3
+```{r}
+#format SACI16A (If you needed urgent medical care, would you avoid going to the emergency room due to concerns about contracting COVID-19?)
+
+stltestsurv$ERavoid<-ifelse(stltestsurv$SACI16A==1, 1, 0) #Would avoid ER due to COVID-19 concerns
+stltestsurv$ERavoid<-factor(stltestsurv$ERavoid, levels=c(1:0), labels=c("Would avoid ER due to COVID-19 concerns", "Would not/unsure avoid ER due to COVID-19 concerns"))
+
+table(stltestsurv$ERavoid, useNA="always")
+
+table(SACI16B_1=stltestsurv[which(stltestsurv$SACI16A==1),]$SACI16B_1, useNA="always")
+table(SACI16B_2=stltestsurv[which(stltestsurv$SACI16A==1),]$SACI16B_2, useNA="always")
+table(SACI16B_3=stltestsurv[which(stltestsurv$SACI16A==1),]$SACI16B_3, useNA="always")
+table(SACI16B_4=stltestsurv[which(stltestsurv$SACI16A==1),]$SACI16B_4, useNA="always")
+
+
+table(SACI16B_1=stltestsurv[which(stltestsurv$SACI16A==1),]$SACI16B_1,SACI16B_2=stltestsurv[which(stltestsurv$SACI16A==1),]$SACI16B_2, useNA="always")
+
+#format SACI16B_1
+table(stltestsurv$SACI16B_1)
+stltestsurv$ERavoid1[stltestsurv$SACI16B_1==1]<-0 #Concern for getting exposed to COVID-19
+stltestsurv$ERavoid1[stltestsurv$SACI16B_1==2]<-1 #A feeling that your concern was minor and other people needed care more 
+stltestsurv$ERavoid1[stltestsurv$SACI16B_1==3]<-2 #Advised not to seek care by a healthcare provider
+stltestsurv$ERavoid1[stltestsurv$SACI16B_1==4]<-3 #Cost
+stltestsurv$ERavoid1[stltestsurv$SACI16B_1==5]<-4 #Other
+stltestsurv$ERavoid1[stltestsurv$SACI16B_1==7]<-5 #Unsure
+
+
+stltestsurv$ERavoid1<-factor(stltestsurv$ERavoid1, levels=c(0:5), labels=c("Concern for getting exposed to COVID-19", "A feeling that your concern was minor and other people needed care more", "Advised not to seek care by a healthcare provider", "Cost", "Other", "Unsure"))
+
+#format SACI16B_2
+table(stltestsurv$SACI16B_2)
+stltestsurv$ERavoid2[stltestsurv$SACI16B_2==1]<-0 #Concern for getting exposed to COVID-19
+stltestsurv$ERavoid2[stltestsurv$SACI16B_2==2]<-1 #A feeling that your concern was minor and other people needed care more 
+stltestsurv$ERavoid2[stltestsurv$SACI16B_2==3]<-2 #Advised not to seek care by a healthcare provider
+stltestsurv$ERavoid2[stltestsurv$SACI16B_2==4]<-3 #Cost
+stltestsurv$ERavoid2[stltestsurv$SACI16B_2==5]<-4 #Other
+stltestsurv$ERavoid2[stltestsurv$SACI16B_2==7]<-5 #Unsure
+
+
+stltestsurv$ERavoid2<-factor(stltestsurv$ERavoid2, levels=c(0:5), labels=c("Concern for getting exposed to COVID-19", "A feeling that your concern was minor and other people needed care more", "Advised not to seek care by a healthcare provider", "Cost", "Other", "Unsure"))
+
+table(stltestsurv$ERavoid2)
+
+#format SACI16B_3
+table(stltestsurv$SACI16B_3)
+stltestsurv$ERavoid3[stltestsurv$SACI16B_3==1]<-0 #Concern for getting exposed to COVID-19
+stltestsurv$ERavoid3[stltestsurv$SACI16B_3==2]<-1 #A feeling that your concern was minor and other people needed care more 
+stltestsurv$ERavoid3[stltestsurv$SACI16B_3==3]<-2 #Advised not to seek care by a healthcare provider
+stltestsurv$ERavoid3[stltestsurv$SACI16B_3==4]<-3 #Cost
+stltestsurv$ERavoid3[stltestsurv$SACI16B_3==5]<-4 #Other
+stltestsurv$ERavoid3[stltestsurv$SACI16B_3==7]<-5 #Unsure
+table(stltestsurv$SACI16B_3)
+
+stltestsurv$ERavoid3<-factor(stltestsurv$ERavoid3, levels=c(0:5), labels=c("Concern for getting exposed to COVID-19", "A feeling that your concern was minor and other people needed care more", "Advised not to seek care by a healthcare provider", "Cost", "Other", "Unsure"))
+
+#format SACI16B_4
+stltestsurv$ERavoid4[stltestsurv$SACI16B_4==1]<-0 #Concern for getting exposed to COVID-19
+stltestsurv$ERavoid4[stltestsurv$SACI16B_4==2]<-1 #A feeling that your concern was minor and other people needed care more 
+stltestsurv$ERavoid4[stltestsurv$SACI16B_4==3]<-2 #Advised not to seek care by a healthcare provider
+stltestsurv$ERavoid4[stltestsurv$SACI16B_4==4]<-3 #Cost
+stltestsurv$ERavoid4[stltestsurv$SACI16B_4==5]<-4 #Other
+stltestsurv$ERavoid4[stltestsurv$SACI16B_4==7]<-5 #Unsure
+
+stltestsurv$ERavoid4<-factor(stltestsurv$ERavoid4, levels=c(0:5), labels=c("Concern for getting exposed to COVID-19", "A feeling that your concern was minor and other people needed care more", "Advised not to seek care by a healthcare provider", "Cost", "Other", "Unsure"))
+
+table(stltestsurv$ERavoid4)
+
+#SACI16B_5 and SACI16B_6 are blank so do not use
+
+#combined variable for ER avoid Concern for getting exposed to COVID-19
+stltestsurv$ERavoid_COVID<-ifelse(stltestsurv$ERavoid=="Would avoid ER due to COVID-19 concerns" &
+                                                  (stltestsurv$ERavoid1=="Concern for getting exposed to COVID-19"|
+                                                   stltestsurv$ERavoid2=="Concern for getting exposed to COVID-19"|
+                                                   stltestsurv$ERavoid3=="Concern for getting exposed to COVID-19"|
+                                                   stltestsurv$ERavoid4=="Concern for getting exposed to COVID-19"
+                                                    ), 1, 0)
+
+stltestsurv$ERavoid_COVID<-ifelse(stltestsurv$ERavoid=="Would avoid ER due to COVID-19 concerns" & is.na(stltestsurv$ERavoid_COVID), 0, stltestsurv$ERavoid_COVID)
+
+stltestsurv$ERavoid_COVID<-factor(stltestsurv$ERavoid_COVID, levels=c(1:0), labels=c("Concern for getting exposed to COVID-19", "Not concerned for getting exposed to COVID-19"))
+table(stltestsurv$ERavoid_COVID)
+
+
+#combined variable for ER avoid Concern for a feeling that your concern was minor and other people needed care more
+stltestsurv$ERavoid_Minor<-ifelse(stltestsurv$ERavoid=="Would avoid ER due to COVID-19 concerns" &
+                                                  (stltestsurv$ERavoid1=="A feeling that your concern was minor and other people needed care more"|
+                                                   stltestsurv$ERavoid2=="A feeling that your concern was minor and other people needed care more"|
+                                                   stltestsurv$ERavoid3=="A feeling that your concern was minor and other people needed care more"|
+                                                   stltestsurv$ERavoid4=="A feeling that your concern was minor and other people needed care more"
+                                                   ), 1, 0)
+
+stltestsurv$ERavoid_Minor<-ifelse(stltestsurv$ERavoid=="Would avoid ER due to COVID-19 concerns" & is.na(stltestsurv$ERavoid_Minor), 0, stltestsurv$ERavoid_Minor)
+
+stltestsurv$ERavoid_Minor<-factor(stltestsurv$ERavoid_Minor, levels=c(1:0), labels=c("A feeling that your concern was minor and other people needed care more", "Not feeling that your concern was minor and other people needed care more"))
+table(stltestsurv$ERavoid_Minor)
+
+
+#combined variable for Advised not to seek care by a healthcare provider
+stltestsurv$ERavoid_Advised<-ifelse(stltestsurv$ERavoid=="Would avoid ER due to COVID-19 concerns" &
+                                                  (stltestsurv$ERavoid1=="Advised not to seek care by a healthcare provider"|
+                                                   stltestsurv$ERavoid2=="Advised not to seek care by a healthcare provider"|
+                                                   stltestsurv$ERavoid3=="Advised not to seek care by a healthcare provider"|
+                                                   stltestsurv$ERavoid4=="Advised not to seek care by a healthcare provider"
+                                                   ),1, 0)
+
+stltestsurv$ERavoid_Advised<-ifelse(stltestsurv$ERavoid=="Would avoid ER due to COVID-19 concerns" & is.na(stltestsurv$ERavoid_Advised), 0, stltestsurv$ERavoid_Advised)
+
+stltestsurv$ERavoid_Advised<-factor(stltestsurv$ERavoid_Advised, levels=c(1:0), labels=c("Advised not to seek care by a healthcare provider", "Not Advised not to seek care by a healthcare provider"))
+table(stltestsurv$ERavoid_Advised)
+
+#combined variable for Cost
+stltestsurv$ERavoid_Cost<-ifelse(stltestsurv$ERavoid=="Would avoid ER due to COVID-19 concerns" &
+                                                  (stltestsurv$ERavoid1=="Cost"|
+                                                   stltestsurv$ERavoid2=="Cost"|
+                                                   stltestsurv$ERavoid3=="Cost"|
+                                                   stltestsurv$ERavoid4=="Cost"
+                                                   ), 1, 0)
+
+stltestsurv$ERavoid_Cost<-ifelse(stltestsurv$ERavoid=="Would avoid ER due to COVID-19 concerns" & is.na(stltestsurv$ERavoid_Cost), 0, stltestsurv$ERavoid_Cost)
+
+stltestsurv$ERavoid_Cost<-factor(stltestsurv$ERavoid_Cost, levels=c(1:0), labels=c("Cost", "Not Cost"))
+table(stltestsurv$ERavoid_Cost)
+
+#combined variable for Other
+stltestsurv$ERavoid_Other<-ifelse(stltestsurv$ERavoid=="Would avoid ER due to COVID-19 concerns" &
+                                                  (stltestsurv$ERavoid1=="Other"|
+                                                   stltestsurv$ERavoid2=="Other"|
+                                                   stltestsurv$ERavoid3=="Other"|
+                                                   stltestsurv$ERavoid4=="Other"
+                                                   ), 1, 0)
+
+stltestsurv$ERavoid_Other<-ifelse(stltestsurv$ERavoid=="Would avoid ER due to COVID-19 concerns" & is.na(stltestsurv$ERavoid_Other), 0, stltestsurv$ERavoid_Other)
+table(stltestsurv$ERavoid_Other)
+
+stltestsurv$ERavoid_Other<-factor(stltestsurv$ERavoid_Other, levels=c(1:0), labels=c("Other", "Not Other"))
+table(stltestsurv$ERavoid_Other)
+
+
+#combined variable for Unsure
+stltestsurv$ERavoid_Unsure<-ifelse(stltestsurv$ERavoid=="Would avoid ER due to COVID-19 concerns" &
+                                                  (stltestsurv$ERavoid1=="Unsure"|
+                                                   stltestsurv$ERavoid2=="Unsure"|
+                                                   stltestsurv$ERavoid3=="Unsure"|
+                                                   stltestsurv$ERavoid4=="Unsure")
+                                                  , 1, 0)
+
+table(stltestsurv$ERavoid_Unsure)
+stltestsurv$ERavoid_Unsure<-ifelse(stltestsurv$ERavoid=="Would avoid ER due to COVID-19 concerns" & is.na(stltestsurv$ERavoid_Unsure), 0, stltestsurv$ERavoid_Unsure)
+
+stltestsurv$ERavoid_Unsure<-factor(stltestsurv$ERavoid_Unsure, levels=c(1:0), labels=c("Unsure", "Not Unsure"))
+table(stltestsurv$ERavoid_Unsure)
+
+#combine other an unsure
+table(stltestsurv$ERavoid_Other)
+table(stltestsurv$ERavoid_Unsure,stltestsurv$ERavoid_Other)
+stltestsurv$ERavoid_Other2<-ifelse(stltestsurv$ERavoid_Unsure=="Unsure"|stltestsurv$ERavoid_Other=="Other", 1, 0)
+table(stltestsurv$ERavoid_Other2)
+
+stltestsurv$ERavoid_Other<-factor(stltestsurv$ERavoid_Other2, levels=c(1:0), labels=c("Other/Unsure", "Not Other/Unsure"))
+table(stltestsurv$ERavoid_Other)
+
+table(stltestsurv$ERavoid, stltestsurv$SACI16B_1)
+
+
+#Use only SACI_16B_1
+#combined variable for ER avoid Concern for getting exposed to COVID-19
+stltestsurv$ERavoid_why[stltestsurv$SACI16B_1==1]<-0
+stltestsurv$ERavoid_why[stltestsurv$SACI16B_1==2]<-1
+stltestsurv$ERavoid_why[stltestsurv$SACI16B_1==3]<-2
+stltestsurv$ERavoid_why[stltestsurv$SACI16B_1==4]<-3
+stltestsurv$ERavoid_why[stltestsurv$SACI16B_1==5]<-4
+stltestsurv$ERavoid_why[stltestsurv$SACI16B_1==7]<-4
+stltestsurv$ERavoid_why[stltestsurv$SACI16B_1==9]<-NA
+
+table(stltestsurv$ERavoid_why, useNA="always")
+table(SACI16B_1=stltestsurv$SACI16B_1,  stltestsurv$ERavoid_why, useNA="always")
+
+stltestsurv$ERavoid_why<-factor(stltestsurv$ERavoid_why, levels=c(0:4), labels=c("Covid fear", "Minor", "Advised", "Cost", "Other/Unsure"))
+table(stltestsurv$ERavoid_why)
+
+#Make yes no for each of above--needed for chisq
+
+stltestsurv$ERavoid_why_fear<-ifelse(stltestsurv$ERavoid_why=="Covid fear", 1, ifelse(stltestsurv$ERavoid_why %in% c("Minor", "Advised", "Cost", "Other/Unsure"),0, NA))
+
+stltestsurv$ERavoid_why_minor<-ifelse(stltestsurv$ERavoid_why=="Minor", 1, ifelse(stltestsurv$ERavoid_why %in% c("Covid fear", "Advised", "Cost", "Other/Unsure"),0, NA))
+
+stltestsurv$ERavoid_why_advised<-ifelse(stltestsurv$ERavoid_why=="Advised", 1, ifelse(stltestsurv$ERavoid_why %in% c("Minor", "Covid fear", "Cost", "Other/Unsure"),0, NA))
+
+stltestsurv$ERavoid_why_cost<-ifelse(stltestsurv$ERavoid_why=="Cost", 1, ifelse(stltestsurv$ERavoid_why %in% c("Minor", "Advised", "Covid fear", "Other/Unsure"),0, NA))
+
+stltestsurv$ERavoid_why_OtherUnsure<-ifelse(stltestsurv$ERavoid_why=="Other/Unsure", 1, ifelse(stltestsurv$ERavoid_why %in% c("Minor", "Advised", "Cost", "Covid fear"),0, NA))
+
+table(stltestsurv$ERavoid_why_fear, useNA="always")
+table(stltestsurv$ERavoid_why_minor, useNA="always")
+table(stltestsurv$ERavoid_why_advised, useNA="always")
+table(stltestsurv$ERavoid_why_cost, useNA="always")
+table(stltestsurv$ERavoid_why_OtherUnsure, useNA="always")
+
+
+stltestsurv$ERavoid_why_fear<-factor(stltestsurv$ERavoid_why_fear, levels=c(0:1), labels=c("No", "Yes"))
+
+stltestsurv$ERavoid_why_minor<-factor(stltestsurv$ERavoid_why_minor, levels=c(0:1), labels=c("No", "Yes"))
+
+stltestsurv$ERavoid_why_advised<-factor(stltestsurv$ERavoid_why_advised, levels=c(0:1), labels=c("No", "Yes"))
+
+stltestsurv$ERavoid_why_cost<-factor(stltestsurv$ERavoid_why_cost, levels=c(0:1), labels=c("No", "Yes"))
+
+stltestsurv$ERavoid_why_OtherUnsure<-factor(stltestsurv$ERavoid_why_OtherUnsure, levels=c(0:1), labels=c("No", "Yes"))
+
+
+stltestsurv$ERavoid_why2<-ifelse(is.na(stltestsurv$ERavoid_why), 6, stltestsurv$ERavoid_why)
+
+stltestsurv$ERavoid_why2<-factor(stltestsurv$ERavoid_why2, levels=c(1:6), labels=c("Covid fear", "Minor", "Advised", "Cost", "Other/Unsure", "None"))
+
+table(stltestsurv$ERavoid_why2)
+
+#Make yes no for each of above--needed for chisq
+
+stltestsurv$ERavoid_why2_fear<-ifelse(stltestsurv$ERavoid_why2=="Covid fear", 1, ifelse(stltestsurv$ERavoid_why2 %in% c("Minor", "Advised", "Cost", "Other/Unsure","None"),0, NA))
+
+stltestsurv$ERavoid_why2_minor<-ifelse(stltestsurv$ERavoid_why2=="Minor", 1, ifelse(stltestsurv$ERavoid_why2 %in% c("Covid fear", "Advised", "Cost", "Other/Unsure","None"),0, NA))
+
+stltestsurv$ERavoid_why2_advised<-ifelse(stltestsurv$ERavoid_why2=="Advised", 1, ifelse(stltestsurv$ERavoid_why2 %in% c("Minor", "Covid fear", "Cost", "Other/Unsure","None"),0, NA))
+
+stltestsurv$ERavoid_why2_cost<-ifelse(stltestsurv$ERavoid_why2=="Cost", 1, ifelse(stltestsurv$ERavoid_why2 %in% c("Minor", "Advised", "Covid fear", "Other/Unsure","None"),0, NA))
+
+stltestsurv$ERavoid_why2_OtherUnsure<-ifelse(stltestsurv$ERavoid_why2=="Other/Unsure", 1, ifelse(stltestsurv$ERavoid_why2 %in% c("Minor", "Advised", "Cost", "Covid fear","None"),0, NA))
+
+
+stltestsurv$ERavoid_why2_None<-ifelse(stltestsurv$ERavoid_why2=="None", 1, ifelse(stltestsurv$ERavoid_why2 %in% c("Minor", "Advised", "Cost", "Covid fear"),0, NA))
+
+stltestsurv$ERavoid_why2_fear<-factor(stltestsurv$ERavoid_why2_fear, levels=c(0:1), labels=c("No", "Yes"))
+
+stltestsurv$ERavoid_why2_minor<-factor(stltestsurv$ERavoid_why2_minor, levels=c(0:1), labels=c("No", "Yes"))
+
+stltestsurv$ERavoid_why2_advised<-factor(stltestsurv$ERavoid_why2_advised, levels=c(0:1), labels=c("No", "Yes"))
+
+stltestsurv$ERavoid_why2_cost<-factor(stltestsurv$ERavoid_why2_cost, levels=c(0:1), labels=c("No", "Yes"))
+
+stltestsurv$ERavoid_why2_OtherUnsure<-factor(stltestsurv$ERavoid_why2_OtherUnsure, levels=c(0:1), labels=c("No", "Yes"))
+
+table(stltestsurv$ERavoid_why2_fear)
+```
+
+
+## Dropping variables
+```{r}
+
+keeps<-c( "RACE_I", "Race_cat2_I", "age_cat", "age_cat2", "SEX_I",  "COMBVAR", "marital", "education", "Survey_Weight",
+"genhealth", "INSURANCE_I", "medaptcan", "medaptcantype_comb_canscreen", "medaptcantype_comb_PC","medaptcantype_comb_ESP", "medaptcantype_comb_MH", "medaptcantype_comb_onc", "medaptcantype_comb_othspe", "medaptcantype_comb_PT", "medaptcantype_comb_dent", "medaptcantype_comb_eye", "medaptcantype_comb_oth", "medaptcantype_comb_unsure", "medaptcan_p", "medaptcantype_comb_canscreenp",
+"medaptcantype_comb_PCp",  "medaptcantype_comb_ESPp", "medaptcantype_comb_MHp", "medaptcantype_comb_oncp", "medaptcantype_comb_derm","medaptcantype_comb_othspep","medaptcantype_comb_PTp","medaptcantype_comb_dentp","medaptcantype_comb_eyep","medaptcantype_comb_othp","medaptcantype_comb_unsurep","ERavoid","UMC_scorecat","medaptcan_all","ERavoid_COVID",  "ERavoid_Minor", "ERavoid_Advised","ERavoid_Cost",  "ERavoid_Other","ERavoid_Unsure","ERavoid_why", "ERavoid_why_fear",  "ERavoid_why_minor","ERavoid_why_advised","ERavoid_why_cost","ERavoid_why_OtherUnsure", "ERavoid_why2","ERavoid_why2", "ERavoid_why2_fear",  "ERavoid_why2_minor","ERavoid_why2_advised","ERavoid_why2_cost","ERavoid_why2_OtherUnsure", "medaptcan_all_comb_canscreen","medaptcan_all_comb_PC","medaptcan_all_comb_ESP","medaptcan_all_comb_MH","medaptcan_all_comb_derm","medaptcan_all_comb_onc","medaptcan_all_comb_othspe","medaptcan_all_comb_PT", "medaptcantype_comb_dermp","medaptcan_all_comb_dent","medaptcan_all_comb_eye","medaptcan_all_comb_oth","medaptcan_all_comb_unsure", "SACI16B_1", "SACI16B_2", "SACI16B_3", "SACI16B_4", "SACI16B_5","SACI16B_6")
+
+exc_ex<-stltestsurv[keeps]
+
+```
+
+## Numbers for figure 1
+```{r}
+flowvars<-read_sas("/Users/kijohnson/Box/COVID Survey Shared Data/Newest data/MSG Weighted Dataset July 12, 2021 (Final)/flowvars.sas7bdat")
+
+table(flowvars$REACHED, flowvars$COMPLETED)
+
+data<-flowvars[which(flowvars$REACHED==0 & flowvars$COMPLETED==1),]
+table(data$ELIGIBLE)
+
+write_csv(data, "data_completed_notreached.csv")
+#recode those who have reached=0 and completed=1 as reached
+
+#correct errors for 180 listed as completed but not reached
+flowvars$Reached<-ifelse(flowvars$REACHED==0 & flowvars$COMPLETED==1, flowvars$REACHED==1, 0)
+table(flowvars$Reached, flowvars$ELIGIBLE)
+
+del0<-flowvars[which(flowvars$REACHED==1),]
+del1<-flowvars[which(flowvars$ELIGIBLE==1),]
+del2<-del1[which(del1$COMPLETED==1),]
+```
+
+## Table 2 Characteristics of the study population
+```{r}
+
+library(table1)
+table1(~SEX_I + as.factor(RACE_I) + age_cat2 + marital +education, exc_ex)
+
+```
+
+# Supplementary Table 1-3 Unweighted prevalences
+```{r}
+#S1
+table1(~Race_cat2_I + age_cat2 + SEX_I +genhealth+INSURANCE_I +UMC_scorecat|medaptcan_all,  exc_ex)
+table1(~Race_cat2_I + age_cat2 + SEX_I +genhealth+INSURANCE_I +UMC_scorecat|medaptcan, exc_ex)
+table1(~Race_cat2_I + age_cat2 + SEX_I +genhealth+INSURANCE_I +UMC_scorecat|medaptcan_p, exc_ex)
+
+table1(~medaptcan_all, exc_ex)
+table1(~medaptcan, exc_ex)
+table1(~medaptcan_p, exc_ex)
+
+#S2
+table1(~medaptcan_all_comb_canscreen + medaptcan_all_comb_PC + medaptcan_all_comb_ESP + medaptcan_all_comb_MH + medaptcan_all_comb_derm + medaptcan_all_comb_onc + medaptcan_all_comb_oth + medaptcan_all_comb_PT +medaptcan_all_comb_dent + medaptcan_all_comb_eye + medaptcan_all_comb_othspe + medaptcan_all_comb_unsure, exc_ex)
+
+table1(~medaptcantype_comb_canscreen +  medaptcantype_comb_PC + medaptcantype_comb_ESP + medaptcantype_comb_MH +medaptcantype_comb_derm + medaptcantype_comb_onc + medaptcantype_comb_oth + medaptcantype_comb_PT + medaptcantype_comb_dent + medaptcantype_comb_eye + medaptcantype_comb_othspe + medaptcantype_comb_unsure, exc_ex)
+
+table1(~medaptcantype_comb_canscreenp +  medaptcantype_comb_PCp + medaptcantype_comb_ESPp + medaptcantype_comb_MHp +medaptcantype_comb_dermp + medaptcantype_comb_oncp + medaptcantype_comb_othp + medaptcantype_comb_PTp + medaptcantype_comb_dentp + medaptcantype_comb_eyep + medaptcantype_comb_othspep + medaptcantype_comb_unsurep, exc_ex)
+
+#S3
+table1(~Race_cat2_I + age_cat2 + SEX_I +genhealth+INSURANCE_I +UMC_scorecat|ERavoid,  exc_ex)
+table1(~ERavoid,  exc_ex)
+```
+
+## Weights for survey analysis based on n=2314 
+```{r}
+
+svy_I<-svydesign(id=~1, weights=~Survey_Weight, data=exc_ex)
+
+```
+
+
+## Table 2: Health services--Provider cancellations
+```{r}
+a<-as.data.frame(svymean(~~medaptcan, design=svy_I))
+a$percent<-a$mean*100
+a$Variable <- row.names(a)
+
+b<-as.data.frame(confint(svymean(~~medaptcan, design=svy_I)))
+b$lowCI<-b$`2.5 %`*100
+b$highCI<-b$`97.5 %`*100
+b$Variable <- row.names(b)
+
+
+##stratified by race
+c<-as.data.frame(svyby(~medaptcan, ~Race_cat2_I, design=svy_I,  svymean))
+c$Cancelled<-c$`medaptcanHas had appointments cancelled`*100
+c$Notcancelled<-c$`medaptcanHas not/unsure had appointments cancelled`*100
+
+#colnames(a)[1]<-"Variable"
+d<-as.data.frame(confint(svyby(~medaptcan, ~Race_cat2_I, design=svy_I,  svymean)))
+d$lowCI<-d$`2.5 %`*100
+d$highCI<-d$`97.5 %`*100
+d$Variable <- row.names(d)
+
+chiR<-svychisq(~medaptcan + Race_cat2_I, statistic="Wald", svy_I)
+chiR
+
+##stratified by age
+e<-as.data.frame(svyby(~medaptcan, ~age_cat2, design=svy_I,  svymean))
+e$Cancelled<-e$`medaptcanHas had appointments cancelled`*100
+e$Notcancelled<-e$`medaptcanHas not/unsure had appointments cancelled`*100
+
+#colnames(a)[1]<-"Variable"
+f<-as.data.frame(confint(svyby(~medaptcan, ~age_cat2, design=svy_I,  svymean)))
+f$lowCI<-f$`2.5 %`*100
+f$highCI<-f$`97.5 %`*100
+f$Variable <- row.names(f)
+
+chiage<-svychisq(~medaptcan + age_cat2, statistic="Wald", svy_I)
+chiage
+
+##stratified by sex
+g<-as.data.frame(svyby(~medaptcan, ~SEX_I, design=svy_I,  svymean))
+g$Cancelled<-g$`medaptcanHas had appointments cancelled`*100
+g$Notcancelled<-g$`medaptcanHas not/unsure had appointments cancelled`*100
+
+#colnames(a)[1]<-"Variable"
+h<-as.data.frame(confint(svyby(~medaptcan, ~SEX_I, design=svy_I,  svymean)))
+h$lowCI<-h$`2.5 %`*100
+h$highCI<-h$`97.5 %`*100
+h$Variable <- row.names(h)
+
+chisex<-svychisq(~medaptcan + SEX_I, statistic="Wald", svy_I)
+chisex
+
+#Stratify by respondent health
+i<-as.data.frame(svyby(~medaptcan, ~genhealth, design=svy_I, svymean))
+i$Cancelled<-i$`medaptcanHas had appointments cancelled`*100
+i$Notcancelled<-i$`medaptcanHas not/unsure had appointments cancelled`*100
+
+#colnames(a)[1]<-"Variable"
+j<-as.data.frame(confint(svyby(~medaptcan, ~genhealth, design=svy_I, svymean)))
+j$lowCI<-j$`2.5 %`*100
+j$highCI<-j$`97.5 %`*100
+j$Variable <- row.names(j)
+rownames(j)<- c()
+j<-j[-c(4),]
+rownames(j)<- c()
+chiRH<-svychisq(~medaptcan + genhealth, statistic="Wald",  svy_I)
+chiRH
+
+#Stratify by health insurance
+k<-as.data.frame(svyby(~medaptcan, ~INSURANCE_I, design=svy_I,  svymean))
+k$Cancelled<-k$`medaptcanHas had appointments cancelled`*100
+k$Notcancelled<-k$`medaptcanHas not/unsure had appointments cancelled`*100
+
+#colnames(a)[1]<-"Variable"
+l<-as.data.frame(confint(svyby(~medaptcan, ~INSURANCE_I, design=svy_I,  svymean)))
+l$lowCI<-l$`2.5 %`*100
+l$highCI<-l$`97.5 %`*100
+l$Variable <- row.names(l)
+keeps<-c("Variable","lowCI", "highCI")
+
+chiins<-svychisq(~medaptcan + INSURANCE_I, statistic="Wald", svy_I)
+chiins
+
+#Stratify by UMC scorecat
+m<-as.data.frame(svyby(~medaptcan, ~UMC_scorecat, design=svy_I, svymean))
+m$Cancelled<-m$`medaptcanHas had appointments cancelled`*100
+m$Notcancelled<-m$`medaptcanHas not/unsure had appointments cancelled`*100
+
+#colnames(a)[1]<-"Variable"
+n<-as.data.frame(confint(svyby(~medaptcan, ~UMC_scorecat, design=svy_I, svymean)))
+n$lowCI<-n$`2.5 %`*100
+n$highCI<-n$`97.5 %`*100
+n$Variable <- row.names(n)
+
+chiUMC<-svychisq(~medaptcan + UMC_scorecat,statistic="Wald", svy_I)
+chiUMC
+
+Table3pro<-data.frame(matrix(ncol=8, nrow=0))
+columns<-c("Variable", "Yes", "LowerCI", "UpperCI", "No", "LowerCIN", "UpperCIN", "P-value")
+colnames(Table3pro)<-columns
+Table3pro[1,]<-c("Overall", a[1,3], b[1,3], b[1,4], a[2,3], b[2,3], b[2,4], "NA") 
+Table3pro[2,]<-c("White",   c[1,6], d[1,3], d[1,4], c[1,7], d[3,3], d[3,4], chiR$p.value)
+Table3pro[3,]<-c("Black/Other", c[2,6], d[2,3], d[2,4], c[2,7], d[4,3], d[4,4], chiR$p.value) 
+Table3pro[4,]<-c("18-44", e[1,6], f[1,3], f[1,4], c[1,7], f[4,3], f[4,4], chiage$p.value) 
+Table3pro[5,]<-c("45-64", e[2,6], f[2,3], f[2,4], e[2,7], f[5,3], f[5,4], chiage$p.value) 
+Table3pro[6,]<-c(">65", e[3,6], f[3,3], f[3,4], e[3,7], f[6,3], f[6,4], chiage$p.value) 
+Table3pro[7,]<-c("Female", g[1,6], h[1,3], h[1,4], g[1,7], h[3,3], h[3,4], chisex$p.value)
+Table3pro[8,]<-c("Male", g[2,6], h[2,3], h[2,4], g[2,7], h[4,3], h[4,4],chisex$p.value) 
+Table3pro[9,]<-c("Excellent/Very good", i[1,6], j[1,3], j[1,4], i[1,7], j[3,3], j[3,4], chiRH$p.value)
+Table3pro[10,]<-c("Good", i[2,6], j[2,3], j[2,4], i[2,7], j[5,3], j[5,4], chiRH$p.value)
+Table3pro[11,]<-c("Fair/Poor", i[3,6], j[3,3], j[3,4], i[3,7], j[6,3], j[6,4], chiRH$p.value)
+Table3pro[12,]<-c("Has insurance", k[2,6], l[2,3], l[2,4], k[2,7], l[4,3], l[4,4], chiins$p.value) 
+Table3pro[13,]<-c("Does not have insurance", k[1,6], l[1,3], l[1,4], k[1,7], l[3,3], l[3,4], chiins$p.value) 
+Table3pro[14,]<-c("No Medical conditions", m[1,6], n[1,3], n[1,4], m[1,7], n[4,3], n[4,4], chiUMC$p.value) 
+Table3pro[15,]<-c("One Medical condition", m[2,6], n[2,3], n[2,4], m[2,7], n[5,3], n[5,4], chiUMC$p.value) 
+Table3pro[16,]<-c(">1 Medical condition", m[3,6], n[3,3], n[3,4], m[3,7], n[6,3], n[6,4], chiUMC$p.value) 
+
+Table3pro$Yes<-round(as.numeric(Table3pro$Yes), digit=2)
+Table3pro$LowerCI<-round(as.numeric(Table3pro$LowerCI), digit=2)
+Table3pro$UpperCI<-round(as.numeric(Table3pro$UpperCI), digit=2)
+Table3pro$No<-round(as.numeric(Table3pro$No), digit=2)
+Table3pro$LowerCIN<-round(as.numeric(Table3pro$LowerCIN), digit=2)
+Table3pro$UpperCIN<-round(as.numeric(Table3pro$UpperCIN), digit=2)
+Table3pro$`P-value`<-as.numeric(Table3pro$`P-value`)
+
+
+Table3pro[1,9]<-paste(Table3pro[1,2],"","(",Table3pro[1,3],"to",Table3pro[1,4], ")")
+Table3pro[1,10]<-paste(Table3pro[1,5], "", "(", Table3pro[1,6], "to", Table3pro[1,7], ")")
+Table3pro[2,9]<-paste(Table3pro[2,2], "", "(", Table3pro[2,3], "to", Table3pro[2,4], ")")
+Table3pro[2,10]<-paste(Table3pro[2,5], "", "(", Table3pro[2,6], "to", Table3pro[2,7], ")")
+Table3pro[3,9]<-paste(Table3pro[3,2], "", "(", Table3pro[3,3], "to", Table3pro[3,4], ")")
+Table3pro[3,10]<-paste(Table3pro[3,5], "", "(", Table3pro[3,6], "to", Table3pro[3,7], ")")
+Table3pro[4,9]<-paste(Table3pro[4,2], "", "(", Table3pro[4,3], "to", Table3pro[4,4], ")")
+Table3pro[4,10]<-paste(Table3pro[4,5], "", "(", Table3pro[4,6], "to", Table3pro[4,7], ")")
+Table3pro[5,9]<-paste(Table3pro[5,2], "", "(", Table3pro[5,3], "to", Table3pro[5,4], ")")
+Table3pro[5,10]<-paste(Table3pro[5,5], "", "(", Table3pro[5,6], "to", Table3pro[5,7], ")")
+Table3pro[6,9]<-paste(Table3pro[6,2], "", "(", Table3pro[6,3], "to", Table3pro[6,4], ")")
+Table3pro[6,10]<-paste(Table3pro[6,5], "", "(", Table3pro[6,6], "to", Table3pro[6,7], ")")
+Table3pro[7,9]<-paste(Table3pro[7,2], "", "(", Table3pro[7,3], "to", Table3pro[7,4], ")")
+Table3pro[7,10]<-paste(Table3pro[7,5], "", "(", Table3pro[7,6], "to", Table3pro[7,7], ")")
+Table3pro[8,9]<-paste(Table3pro[8,2], "", "(", Table3pro[8,3], "to", Table3pro[8,4], ")")
+Table3pro[8,10]<-paste(Table3pro[8,5], "", "(", Table3pro[8,6], "to", Table3pro[8,7], ")")
+Table3pro[9,9]<-paste(Table3pro[9,2], "", "(", Table3pro[9,3], "to", Table3pro[9,4], ")")
+Table3pro[9,10]<-paste(Table3pro[9,5], "", "(", Table3pro[9,6], "to", Table3pro[9,7], ")")
+Table3pro[10,9]<-paste(Table3pro[10,2], "", "(", Table3pro[10,3], "to", Table3pro[10,4], ")")
+Table3pro[10,10]<-paste(Table3pro[10,5], "", "(", Table3pro[10,6], "to", Table3pro[10,7], ")")
+Table3pro[11,9]<-paste(Table3pro[11,2], "", "(", Table3pro[11,3], "to", Table3pro[11,4], ")")
+Table3pro[11,10]<-paste(Table3pro[11,5], "", "(", Table3pro[11,6], "to", Table3pro[11,7], ")")
+Table3pro[12,9]<-paste(Table3pro[12,2], "", "(", Table3pro[12,3], "to", Table3pro[12,4], ")")
+Table3pro[12,10]<-paste(Table3pro[12,5], "", "(", Table3pro[12,6], "to", Table3pro[12,7], ")")
+Table3pro[13,9]<-paste(Table3pro[13,2], "", "(", Table3pro[13,3], "to", Table3pro[13,4], ")")
+Table3pro[13,10]<-paste(Table3pro[13,5], "", "(", Table3pro[13,6], "to", Table3pro[13,7], ")")
+Table3pro[14,9]<-paste(Table3pro[14,2], "", "(", Table3pro[14,3], "to", Table3pro[14,4], ")")
+Table3pro[14,10]<-paste(Table3pro[14,5], "", "(", Table3pro[14,6], "to", Table3pro[14,7], ")")
+Table3pro[15,9]<-paste(Table3pro[15,2], "", "(", Table3pro[15,3], "to", Table3pro[15,4], ")")
+Table3pro[15,10]<-paste(Table3pro[15,5], "", "(", Table3pro[15,6], "to", Table3pro[15,7], ")")
+Table3pro[16,9]<-paste(Table3pro[16,2], "", "(", Table3pro[16,3], "to", Table3pro[16,4], ")")
+Table3pro[16,10]<-paste(Table3pro[16,5], "", "(", Table3pro[16,6], "to", Table3pro[16,7], ")")
+
+
+names(Table3pro)[9]<-"Prevalence (yes) (95% CI)"
+names(Table3pro)[10]<-"Prevalence (no) (95% CI)"
+
+Table3pros<-subset(Table3pro, select=c(Variable,`Prevalence (yes) (95% CI)`,  `P-value`))
+
+write_xlsx(Table3pros,"/Users/kijohnson/Box/A_T Drive - kjohnson/Research/Projects/CoronaVirus/STL CO COVID health services survey paper/Table3pros.xlsx")
+```
+
+
+## Health services--Participant cancellations
+```{r}
+a<-as.data.frame(svymean(~medaptcan_p, design=svy_I, na.rm=TRUE))
+a$percent<-a$mean*100
+a$Variable <- row.names(a)
+
+b<-as.data.frame(confint(svymean(~medaptcan_p, design=svy_I, na.rm=TRUE)))
+b$lowCI<-b$`2.5 %`*100
+b$highCI<-b$`97.5 %`*100
+b$Variable <- row.names(b)
+
+##stratified by race
+c<-as.data.frame(svyby(~medaptcan_p, ~Race_cat2_I, design=svy_I,  svymean))
+c$Cancelled<-c$`medaptcan_pParticipant cancelled or delayed appointment`*100
+c$Notcancelled<-c$`medaptcan_pParticipant did not/unsure cancel or delay appointment`*100
+
+#colnames(a)[1]<-"Variable"
+d<-as.data.frame(confint(svyby(~medaptcan_p, ~Race_cat2_I, design=svy_I,  svymean)))
+d$lowCI<-d$`2.5 %`*100
+d$highCI<-d$`97.5 %`*100
+d$Variable <- row.names(d)
+
+chiR<-svychisq(~medaptcan_p + Race_cat2_I, statistc="Wald", svy_I)
+chiR
+
+##stratified by age
+e<-as.data.frame(svyby(~medaptcan_p, ~age_cat2, design=svy_I, svymean))
+e$Cancelled<-e$`medaptcan_pParticipant cancelled or delayed appointment`*100
+e$Notcancelled<-e$`medaptcan_pParticipant did not/unsure cancel or delay appointment`*100
+
+#colnames(a)[1]<-"Variable"
+f<-as.data.frame(confint(svyby(~medaptcan_p, ~age_cat2, design=svy_I,  svymean)))
+f$lowCI<-f$`2.5 %`*100
+f$highCI<-f$`97.5 %`*100
+f$Variable <- row.names(f)
+
+chiage<-svychisq(~medaptcan_p + age_cat2, statistc="Wald", svy_I)
+chiage
+
+##stratified by sex
+g<-as.data.frame(svyby(~medaptcan_p, ~SEX_I, design=svy_I,  svymean))
+g$Cancelled<-g$`medaptcan_pParticipant cancelled or delayed appointment`*100
+g$Notcancelled<-g$`medaptcan_pParticipant did not/unsure cancel or delay appointment`*100
+
+#colnames(a)[1]<-"Variable"
+h<-as.data.frame(confint(svyby(~medaptcan_p, ~SEX_I, design=svy_I,  svymean)))
+h$lowCI<-h$`2.5 %`*100
+h$highCI<-h$`97.5 %`*100
+h$Variable <- row.names(h)
+chisex<-svychisq(~medaptcan_p + SEX_I, statistc="Wald", svy_I)
+chisex
+
+#Stratify by respondent health
+i<-as.data.frame(svyby(~medaptcan_p, ~genhealth, design=svy_I, svymean))
+i$Cancelled<-i$`medaptcan_pParticipant cancelled or delayed appointment`*100
+i$Notcancelled<-i$`medaptcan_pParticipant did not/unsure cancel or delay appointment`*100
+
+#colnames(a)[1]<-"Variable"
+j<-as.data.frame(confint(svyby(~medaptcan_p, ~genhealth, design=svy_I,  svymean)))
+j$lowCI<-j$`2.5 %`*100
+j$highCI<-j$`97.5 %`*100
+j$Variable <- row.names(j)
+rownames(j)<- c()
+j<-j[-c(4),]
+rownames(j)<- c()
+
+chiRH<-svychisq(~medaptcan_p + genhealth, statistc="Wald", svy_I)
+chiRH
+
+#Stratify by health insurance
+k<-as.data.frame(svyby(~medaptcan_p, ~INSURANCE_I, design=svy_I,  svymean))
+k$Cancelled<-k$`medaptcan_pParticipant cancelled or delayed appointment`*100
+k$Notcancelled<-k$`medaptcan_pParticipant did not/unsure cancel or delay appointment`*100
+
+#colnames(a)[1]<-"Variable"
+l<-as.data.frame(confint(svyby(~medaptcan_p, ~INSURANCE_I, design=svy_I, svymean)))
+l$lowCI<-l$`2.5 %`*100
+l$highCI<-l$`97.5 %`*100
+l$Variable <- row.names(l)
+
+chiins<-svychisq(~medaptcan_p + INSURANCE_I,statistc="Wald", svy_I)
+chiins
+
+#Stratify by UMC scorecat
+m<-as.data.frame(svyby(~medaptcan_p, ~UMC_scorecat, design=svy_I, svymean))
+m$Cancelled<-m$`medaptcan_pParticipant cancelled or delayed appointment`*100
+m$Notcancelled<-m$`medaptcan_pParticipant did not/unsure cancel or delay appointment`*100
+
+
+#colnames(a)[1]<-"Variable"
+n<-as.data.frame(confint(svyby(~medaptcan_p, ~UMC_scorecat, design=svy_I, svymean)))
+n$lowCI<-n$`2.5 %`*100
+n$highCI<-n$`97.5 %`*100
+n$Variable <- row.names(n)
+
+chiUMC<-svychisq(~medaptcan_p + UMC_scorecat,statistc="Wald", svy_I)
+chiUMC
+
+Table3par<-data.frame(matrix(ncol=8, nrow=0))
+columns<-c("Variable", "Yes", "LowerCI", "UpperCI", "No", "LowerCIN", "UpperCIN", "P-value")
+colnames(Table3par)<-columns
+Table3par[1,]<-c("Overall", a[1,3], b[1,3], b[1,4], a[2,3], b[2,3], b[2,4], "NA") 
+Table3par[2,]<-c("White",   c[1,6], d[1,3], d[1,4], c[1,7], d[3,3], d[3,4], chiR$p.value)
+Table3par[3,]<-c("Black/Other", c[2,6], d[2,3], d[2,4], c[2,7], d[4,3], d[4,4], chiR$p.value) 
+Table3par[4,]<-c("18-44", e[1,6], f[1,3], f[1,4], c[1,7], f[4,3], f[4,4], chiage$p.value) 
+Table3par[5,]<-c("44-64", e[2,6], f[2,3], f[2,4], e[2,7], f[5,3], f[5,4], chiage$p.value) 
+Table3par[6,]<-c(">=65", e[3,6], f[3,3], f[3,4], e[3,7], f[6,3], f[6,4], chiage$p.value) 
+Table3par[7,]<-c("Male", g[1,6], h[1,3], h[1,4], g[1,7], h[3,3], h[3,4], chisex$p.value)
+Table3par[8,]<-c("Female", g[2,6], h[2,3], h[2,4], g[2,7], h[4,3], h[4,4],chisex$p.value) 
+Table3par[9,]<-c("Excellent/Very good", i[1,6], j[1,3], j[1,4], i[1,7], j[3,3], j[3,4], chiRH$p.value)
+Table3par[10,]<-c("Good", i[2,6], j[2,3], j[2,4], i[2,7], j[5,3], j[5,4], chiRH$p.value)
+Table3par[11,]<-c("Fair/Poor", i[3,6], j[3,3], j[3,4], i[3,7], j[6,3], j[6,4], chiRH$p.value)
+Table3par[12,]<-c("Has insurance", k[2,6], l[2,3], l[2,4], k[2,7], l[4,3], l[4,4], chiins$p.value) 
+Table3par[13,]<-c("Does not have insurance", k[1,6], l[1,3], l[1,4], k[1,7], l[3,3], l[3,4], chiins$p.value) 
+Table3par[14,]<-c("No Medical conditions", m[1,6], n[1,3], n[1,4], m[1,7], n[4,3], n[4,4], chiUMC$p.value) 
+Table3par[15,]<-c("One Medical condition", m[2,6], n[2,3], n[2,4], m[2,7], n[5,3], n[5,4], chiUMC$p.value) 
+Table3par[16,]<-c(">1 Medical condition", m[3,6], n[3,3], n[3,4], m[3,7], n[6,3], n[6,4], chiUMC$p.value) 
+
+Table3par$Yes<-round(as.numeric(Table3par$Yes), digit=2)
+Table3par$LowerCI<-round(as.numeric(Table3par$LowerCI), digit=2)
+Table3par$UpperCI<-round(as.numeric(Table3par$UpperCI), digit=2)
+Table3par$No<-round(as.numeric(Table3par$No), digit=2)
+Table3par$LowerCIN<-round(as.numeric(Table3par$LowerCIN), digit=2)
+Table3par$UpperCIN<-round(as.numeric(Table3par$UpperCIN), digit=2)
+Table3par$`P-value`<-as.numeric(Table3par$`P-value`)
+#Table3par[,-1] <-round(Table3par[,-1],3) #the "-1" excludes column 1
+Table3par
+
+Table3par[1,9]<-paste(Table3par[1,2],"","(",Table3par[1,3],"to",Table3par[1,4], ")")
+Table3par[1,10]<-paste(Table3par[1,5], "", "(", Table3par[1,6], "to", Table3par[1,7], ")")
+Table3par[2,9]<-paste(Table3par[2,2], "", "(", Table3par[2,3], "to", Table3par[2,4], ")")
+Table3par[2,10]<-paste(Table3par[2,5], "", "(", Table3par[2,6], "to", Table3par[2,7], ")")
+Table3par[3,9]<-paste(Table3par[3,2], "", "(", Table3par[3,3], "to", Table3par[3,4], ")")
+Table3par[3,10]<-paste(Table3par[3,5], "", "(", Table3par[3,6], "to", Table3par[3,7], ")")
+Table3par[4,9]<-paste(Table3par[4,2], "", "(", Table3par[4,3], "to", Table3par[4,4], ")")
+Table3par[4,10]<-paste(Table3par[4,5], "", "(", Table3par[4,6], "to", Table3par[4,7], ")")
+Table3par[5,9]<-paste(Table3par[5,2], "", "(", Table3par[5,3], "to", Table3par[5,4], ")")
+Table3par[5,10]<-paste(Table3par[5,5], "", "(", Table3par[5,6], "to", Table3par[5,7], ")")
+Table3par[6,9]<-paste(Table3par[6,2], "", "(", Table3par[6,3], "to", Table3par[6,4], ")")
+Table3par[6,10]<-paste(Table3par[6,5], "", "(", Table3par[6,6], "to", Table3par[6,7], ")")
+Table3par[7,9]<-paste(Table3par[7,2], "", "(", Table3par[7,3], "to", Table3par[7,4], ")")
+Table3par[7,10]<-paste(Table3par[7,5], "", "(", Table3par[7,6], "to", Table3par[7,7], ")")
+Table3par[8,9]<-paste(Table3par[8,2], "", "(", Table3par[8,3], "to", Table3par[8,4], ")")
+Table3par[8,10]<-paste(Table3par[8,5], "", "(", Table3par[8,6], "to", Table3par[8,7], ")")
+Table3par[9,9]<-paste(Table3par[9,2], "", "(", Table3par[9,3], "to", Table3par[9,4], ")")
+Table3par[9,10]<-paste(Table3par[9,5], "", "(", Table3par[9,6], "to", Table3par[9,7], ")")
+Table3par[10,9]<-paste(Table3par[10,2], "", "(", Table3par[10,3], "to", Table3par[10,4], ")")
+Table3par[10,10]<-paste(Table3par[10,5], "", "(", Table3par[10,6], "to", Table3par[10,7], ")")
+Table3par[11,9]<-paste(Table3par[11,2], "", "(", Table3par[11,3], "to", Table3par[11,4], ")")
+Table3par[11,10]<-paste(Table3par[11,5], "", "(", Table3par[11,6], "to", Table3par[11,7], ")")
+Table3par[12,9]<-paste(Table3par[12,2], "", "(", Table3par[12,3], "to", Table3par[12,4], ")")
+Table3par[12,10]<-paste(Table3par[12,5], "", "(", Table3par[12,6], "to", Table3par[12,7], ")")
+Table3par[13,9]<-paste(Table3par[13,2], "", "(", Table3par[13,3], "to", Table3par[13,4], ")")
+Table3par[13,10]<-paste(Table3par[13,5], "", "(", Table3par[13,6], "to", Table3par[13,7], ")")
+Table3par[14,9]<-paste(Table3par[14,2], "", "(", Table3par[14,3], "to", Table3par[14,4], ")")
+Table3par[14,10]<-paste(Table3par[14,5], "", "(", Table3par[14,6], "to", Table3par[14,7], ")")
+Table3par[15,9]<-paste(Table3par[15,2], "", "(", Table3par[15,3], "to", Table3par[15,4], ")")
+Table3par[15,10]<-paste(Table3par[15,5], "", "(", Table3par[15,6], "to", Table3par[15,7], ")")
+Table3par[16,9]<-paste(Table3par[16,2], "", "(", Table3par[16,3], "to", Table3par[16,4], ")")
+Table3par[16,10]<-paste(Table3par[16,5], "", "(", Table3par[16,6], "to", Table3par[16,7], ")")
+
+names(Table3par)[9]<-"Prevalence (yes) (95% CI)"
+names(Table3par)[10]<-"Prevalence (no) (95% CI)"
+
+
+Table3pars<-subset(Table3par, select=c(Variable,`Prevalence (yes) (95% CI)`,  `P-value`))
+
+write_xlsx(Table3pars,"/Users/kijohnson/Box/A_T Drive - kjohnson/Research/Projects/CoronaVirus/STL CO COVID health services survey paper/Table3pars.xlsx")
+
+```
+
+## Health services--Participant or provider cancellations
+```{r}
+ 
+a<-as.data.frame(svymean(~medaptcan_all, design=svy_I ))
+a$percent<-a$mean*100
+a$Variable <- row.names(a)
+
+b<-as.data.frame(confint(svymean(~medaptcan_all, design=svy_I)))
+b$lowCI<-b$`2.5 %`*100
+b$highCI<-b$`97.5 %`*100
+b$Variable <- row.names(b)
+
+##stratified by race
+c<-as.data.frame(svyby(~medaptcan_all, ~Race_cat2_I, design=svy_I, svymean))
+c$Deferred<-c$`medaptcan_allDeferred care`*100
+c$Notdeferred<-c$`medaptcan_allNo deferred care`*100
+
+#colnames(a)[1]<-"Variable"
+d<-as.data.frame(confint(svyby(~medaptcan_all, ~Race_cat2_I, design=svy_I, svymean)))
+d$lowCI<-d$`2.5 %`*100
+d$highCI<-d$`97.5 %`*100
+d$Variable <- row.names(d)
+
+chiR<-svychisq(~medaptcan_all + Race_cat2_I, statistc="Wald", svy_I)
+chiR
+
+##stratified by age
+e<-as.data.frame(svyby(~medaptcan_all, ~age_cat, design=svy_I, svymean))
+e$Deferred<-e$`medaptcan_allDeferred care`*100
+e$Notdeferred<-e$`medaptcan_allNo deferred care`*100
+
+#colnames(a)[1]<-"Variable"
+f<-as.data.frame(confint(svyby(~medaptcan_all, ~age_cat, design=svy_I, svymean)))
+f$lowCI<-f$`2.5 %`*100
+f$highCI<-f$`97.5 %`*100
+f$Variable <- row.names(f)
+
+chiage<-svychisq(~medaptcan_all + age_cat, statistc="Wald",svy_I)
+chiage
+
+##stratified by sex
+
+g<-as.data.frame(svyby(~medaptcan_all, ~SEX_I, design=svy_I, svymean))
+g$Deferred<-g$`medaptcan_allDeferred care`*100
+g$Notdeferred<-g$`medaptcan_allNo deferred care`*100
+
+
+#colnames(a)[1]<-"Variable"
+h<-as.data.frame(confint(svyby(~medaptcan_all, ~SEX_I, design=svy_I, svymean)))
+h$lowCI<-h$`2.5 %`*100
+h$highCI<-h$`97.5 %`*100
+h$Variable <- row.names(h)
+chisex<-svychisq(~medaptcan_all + SEX_I, statistc="Wald",svy_I)
+chisex
+
+#Stratify by respondent health
+i<-as.data.frame(svyby(~medaptcan_all, ~genhealth, design=svy_I, svymean))
+i$Deferred<-i$`medaptcan_allDeferred care`*100
+i$Notdeferred<-i$`medaptcan_allNo deferred care`*100
+
+#colnames(a)[1]<-"Variable"
+j<-as.data.frame(confint(svyby(~medaptcan_all, ~genhealth, design=svy_I, svymean)))
+j$lowCI<-j$`2.5 %`*100
+j$highCI<-j$`97.5 %`*100
+j$Variable <- row.names(j)
+rownames(j)<- c()
+j<-j[-c(4),]
+rownames(j)<- c()
+
+chiRH<-svychisq(~medaptcan_all + genhealth, statistc="Wald", svy_I)
+chiRH
+
+#Stratify by health insurance
+k<-as.data.frame(svyby(~medaptcan_all, ~INSURANCE_I, design=svy_I, svymean))
+k$Deferred<-k$`medaptcan_allDeferred care`*100
+k$Notdeferred<-k$`medaptcan_allNo deferred care`*100
+
+#colnames(a)[1]<-"Variable"
+l<-as.data.frame(confint(svyby(~medaptcan_all, ~INSURANCE_I, design=svy_I, svymean)))
+l$lowCI<-l$`2.5 %`*100
+l$highCI<-l$`97.5 %`*100
+l$Variable <- row.names(l)
+
+chiins<-svychisq(~medaptcan_all + INSURANCE_I, statistc="Wald", svy_I)
+chiins
+
+#Stratify by UMC scorecat
+m<-as.data.frame(svyby(~medaptcan_all, ~UMC_scorecat, design=svy_I, svymean))
+m$Deferred<-m$`medaptcan_allDeferred care`*100
+m$Notdeferred<-m$`medaptcan_allNo deferred care`*100
+
+#colnames(a)[1]<-"Variable"
+n<-as.data.frame(confint(svyby(~medaptcan_all, ~UMC_scorecat, design=svy_I, svymean)))
+n$lowCI<-n$`2.5 %`*100
+n$highCI<-n$`97.5 %`*100
+n$Variable <- row.names(n)
+
+chiUMC<-svychisq(~medaptcan_all + UMC_scorecat, statistc="Wald", svy_I)
+chiUMC
+
+Table3all<-data.frame(matrix(ncol=8, nrow=0))
+columns<-c("Variable", "Yes", "LowerCI", "UpperCI",  "No", "LowerCIN", "UpperCIN",  "P-value")
+colnames(Table3all)<-columns
+Table3all[1,]<-c("Overall", a[2,3], b[2,3], b[2,4], a[1,3], b[1,3], b[1,4],  "NA")
+Table3all[2,]<-c("White", c[1,6], d[3,3], d[3,4], c[1,7], d[1,3], d[1,4],  chiR$p.value) 
+Table3all[3,]<-c("Black/Other", c[2,6], d[4,3], d[4,4], c[2,7], d[2,3], d[2,4],  chiR$p.value) 
+Table3all[4,]<-c("18-44", e[1,6], f[4,3], f[4,4], e[1,7], f[1,3], f[1,4], chiage$p.value) 
+Table3all[5,]<-c("445-64", e[2,6], f[5,3], f[5,4], e[2,7], f[2,3], f[2,4],  chiage$p.value) 
+Table3all[6,]<-c(">=65", e[3,6], f[6,3], f[6,4], e[3,7], f[3,3], f[3,4],  chiage$p.value) 
+Table3all[7,]<-c("Male", g[1,6], h[3,3], h[3,4], g[1,7], h[1,3], h[1,4],  chisex$p.value) 
+Table3all[8,]<-c("Female", g[2,6], h[4,3], h[4,4], g[2,7], h[2,3], h[2,4],  chisex$p.value) 
+Table3all[9,]<-c("Excellent/Very good", i[1,6], j[4,3], j[4,4], i[1,7], j[1,3], j[1,4], chiRH$p.value)
+Table3all[10,]<-c("Good", i[2,6], j[5,3], j[5,4], i[6,7], j[2,3], j[2,4], chiRH$p.value)
+Table3all[11,]<-c("Fair/Poor", i[3,6], j[6,3], j[6,4], i[7,7], j[3,3], j[3,4], chiRH$p.value)
+Table3all[12,]<-c("Has insurance", k[2,6], l[2,3], l[2,4], k[2,7], l[4,3], l[4,4], chiins$p.value) 
+Table3all[13,]<-c("Does not have insurance", k[1,6], l[1,3], l[1,4], k[1,7], l[3,3], l[3,4], chiins$p.value) 
+Table3all[14,]<-c("No Medical conditions", m[1,6], n[4,3], n[4,4], m[1,7], n[1,3], n[1,4],  chiUMC$p.value)
+Table3all[15,]<-c("One Medical condition", m[2,6], n[5,3], n[5,4], m[2,7], n[2,3], n[2,4],  chiUMC$p.value)
+Table3all[16,]<-c(">1 Medical condition",  m[3,6], n[6,3], n[6,4], m[3,7], n[3,3], n[3,4],  chiUMC$p.value) 
+
+Table3all$Yes<-round(as.numeric(Table3all$Yes),2)
+Table3all$LowerCI<-round(as.numeric(Table3all$LowerCI),2)
+Table3all$UpperCI<-round(as.numeric(Table3all$UpperCI),2)
+Table3all$No<-round(as.numeric(Table3all$No),2)
+Table3all$LowerCIN<-round(as.numeric(Table3all$LowerCIN),2)
+Table3all$UpperCIN<-round(as.numeric(Table3all$UpperCIN),2)
+Table3all$`P-value`<-as.numeric(Table3all$`P-value`)
+#Table3all[,-1] <-round(Table3all[,-1],4) #the "-1" excludes column 1
+Table3all
+
+Table3all[1,9]<-paste(Table3all[1,2], "", "(", Table3all[1,3], "to", Table3all[1,4], ")")
+Table3all[1,10]<-paste(Table3all[1,5], "", "(", Table3all[1,6], "to", Table3all[1,7], ")")
+Table3all[2,9]<-paste(Table3all[2,2], "", "(", Table3all[2,3], "to", Table3all[2,4], ")")
+Table3all[2,10]<-paste(Table3all[2,5], "", "(", Table3all[2,6], "to", Table3all[2,7], ")")
+Table3all[3,9]<-paste(Table3all[3,2], "", "(", Table3all[3,3], "to", Table3all[3,4], ")")
+Table3all[3,10]<-paste(Table3all[3,5], "", "(", Table3all[3,6], "to", Table3all[3,7], ")")
+Table3all[4,9]<-paste(Table3all[4,2], "", "(", Table3all[4,3], "to", Table3all[4,4], ")")
+Table3all[4,10]<-paste(Table3all[4,5], "", "(", Table3all[4,6], "to", Table3all[4,7], ")")
+Table3all[5,9]<-paste(Table3all[5,2], "", "(", Table3all[5,3], "to", Table3all[5,4], ")")
+Table3all[5,10]<-paste(Table3all[5,5], "", "(", Table3all[5,6], "to", Table3all[5,7], ")")
+Table3all[6,9]<-paste(Table3all[6,2], "", "(", Table3all[6,3], "to", Table3all[6,4], ")")
+Table3all[6,10]<-paste(Table3all[6,5], "", "(", Table3all[6,6], "to", Table3all[6,7], ")")
+Table3all[7,9]<-paste(Table3all[7,2], "", "(", Table3all[7,3], "to", Table3all[7,4], ")")
+Table3all[7,10]<-paste(Table3all[7,5], "", "(", Table3all[7,6], "to", Table3all[7,7], ")")
+Table3all[8,9]<-paste(Table3all[8,2], "", "(", Table3all[8,3], "to", Table3all[8,4], ")")
+Table3all[8,10]<-paste(Table3all[8,5], "", "(", Table3all[8,6], "to", Table3all[8,7], ")")
+Table3all[9,9]<-paste(Table3all[9,2], "", "(", Table3all[9,3], "to", Table3all[9,4], ")")
+Table3all[9,10]<-paste(Table3all[9,5], "", "(", Table3all[9,6], "to", Table3all[9,7], ")")
+Table3all[10,9]<-paste(Table3all[10,2], "", "(", Table3all[10,3], "to", Table3all[10,4], ")")
+Table3all[10,10]<-paste(Table3all[10,5], "", "(", Table3all[10,6], "to", Table3all[10,7], ")")
+Table3all[11,9]<-paste(Table3all[11,2], "", "(", Table3all[11,3], "to", Table3all[11,4], ")")
+Table3all[11,10]<-paste(Table3all[11,5], "", "(", Table3all[11,6], "to", Table3all[11,7], ")")
+Table3all[12,9]<-paste(Table3all[12,2], "", "(", Table3all[12,3], "to", Table3all[12,4], ")")
+Table3all[12,10]<-paste(Table3all[12,5], "", "(", Table3all[12,6], "to", Table3all[12,7], ")")
+Table3all[13,9]<-paste(Table3all[13,2], "", "(", Table3all[13,3], "to", Table3all[13,4], ")")
+Table3all[13,10]<-paste(Table3all[13,5], "", "(", Table3all[13,6], "to", Table3all[13,7], ")")
+Table3all[14,9]<-paste(Table3all[14,2], "", "(", Table3all[14,3], "to", Table3all[14,4], ")")
+Table3all[14,10]<-paste(Table3all[14,5], "", "(", Table3all[14,6], "to", Table3all[14,7], ")")
+Table3all[15,9]<-paste(Table3all[15,2], "", "(", Table3all[15,3], "to", Table3all[15,4], ")")
+Table3all[15,10]<-paste(Table3all[15,5], "", "(", Table3all[15,6], "to", Table3all[15,7], ")")
+Table3all[16,9]<-paste(Table3all[16,2], "", "(", Table3all[16,3], "to", Table3all[16,4], ")")
+Table3all[16,10]<-paste(Table3all[16,5], "", "(", Table3all[16,6], "to", Table3all[16,7], ")")
+
+names(Table3all)[9]<-"Prevalence (yes) (95% CI)"
+names(Table3all)[10]<-"Prevalence (no) (95% CI)"
+
+Table3alls<-subset(Table3all, select=c(Variable,  `Prevalence (yes) (95% CI)`, `P-value`))
+
+write_xlsx(Table3alls,"/Users/kijohnson/Box/A_T Drive - kjohnson/Research/Projects/CoronaVirus/STL CO COVID health services survey paper/Table3alls.xlsx")
+```
+## Table 4: Cancer screening
+```{r}
+a<-as.data.frame(svymean(~medaptcan_all_comb_canscreen, design=svy_I, na.rm=TRUE))
+a$percent<-a$mean*100
+a$Variable <- row.names(a)
+
+b<-as.data.frame(confint(svymean(~medaptcan_all_comb_canscreen, design=svy_I, na.rm=TRUE)))  
+b$lowCI<-b$`2.5 %`*100
+b$highCI<-b$`97.5 %`*100
+b$Variable <- row.names(b)
+
+c<-as.data.frame(svymean(~medaptcantype_comb_canscreen, design= svy_I, na.rm=TRUE))
+c$percent<-c$mean*100
+c$Variable <- row.names(c)
+
+d<-as.data.frame(confint(svymean(~medaptcantype_comb_canscreen, design=svy_I, na.rm=TRUE)))  
+d$lowCI<-d$`2.5 %`*100
+d$highCI<-d$`97.5 %`*100
+d$Variable <- row.names(d)
+
+e<-as.data.frame(svymean(~medaptcantype_comb_canscreenp, design=svy_I, na.rm=TRUE))
+e$percent<-e$mean*100
+e$Variable <- row.names(e)
+
+
+f<-as.data.frame(confint(svymean(~medaptcantype_comb_canscreenp, design=svy_I, na.rm=TRUE)))  
+f$lowCI<-f$`2.5 %`*100
+f$highCI<-f$`97.5 %`*100
+f$Variable <- row.names(f)
+```
+
+
+## Table 4: Primary Care  appointments cancelled by participant or provider
+```{r}
+a<-as.data.frame(svymean(~medaptcan_all_comb_PC, design=svy_I, na.rm=TRUE))
+a$percent<-a$mean*100
+a$Variable <- row.names(a)
+
+b<-as.data.frame(confint(svymean(~medaptcan_all_comb_PC, design=svy_I, na.rm=TRUE)))  
+b$lowCI<-b$`2.5 %`*100
+b$highCI<-b$`97.5 %`*100
+b$Variable <- row.names(b)
+
+c<-as.data.frame(svymean(~medaptcantype_comb_PC, design= svy_I, na.rm=TRUE))
+c$percent<-c$mean*100
+c$Variable <- row.names(c)
+
+d<-as.data.frame(confint(svymean(~medaptcantype_comb_PC, design=svy_I, na.rm=TRUE)))  
+d$lowCI<-d$`2.5 %`*100
+d$highCI<-d$`97.5 %`*100
+d$Variable <- row.names(d)
+
+e<-as.data.frame(svymean(~medaptcantype_comb_PCp, design=svy_I, na.rm=TRUE))
+e$percent<-e$mean*100
+e$Variable <- row.names(e)
+
+f<-as.data.frame(confint(svymean(~medaptcantype_comb_PCp, design=svy_I, na.rm=TRUE)))  
+f$lowCI<-f$`2.5 %`*100
+f$highCI<-f$`97.5 %`*100
+f$Variable <- row.names(f)
+
+```
+
+## Table 4: Elective surgery or procedure appointments cancelled by provider
+```{r}
+a<-as.data.frame(svymean(~medaptcan_all_comb_ESP, design=svy_I, na.rm=TRUE))
+a$percent<-a$mean*100
+a$Variable <- row.names(a)
+
+b<-as.data.frame(confint(svymean(~medaptcan_all_comb_ESP, design=svy_I, na.rm=TRUE)))  
+b$lowCI<-b$`2.5 %`*100
+b$highCI<-b$`97.5 %`*100
+b$Variable <- row.names(b)
+
+c<-as.data.frame(svymean(~medaptcantype_comb_ESP, design=svy_I, na.rm=TRUE))
+c$percent<-c$mean*100
+c$Variable <- row.names(c)
+
+d<-as.data.frame(confint(svymean(~medaptcantype_comb_ESP, design=svy_I, na.rm=TRUE)))  
+d$lowCI<-d$`2.5 %`*100
+d$highCI<-d$`97.5 %`*100
+d$Variable <- row.names(d)
+
+e<-as.data.frame(svymean(~medaptcantype_comb_ESPp, design=svy_I, na.rm=TRUE))
+e$percent<-e$mean*100
+e$Variable <- row.names(e)
+
+f<-as.data.frame(confint(svymean(~medaptcantype_comb_ESPp, design=svy_I, na.rm=TRUE)))  
+f$lowCI<-f$`2.5 %`*100
+f$highCI<-f$`97.5 %`*100
+f$Variable <- row.names(f)
+```
+
+## Table 4: Mental Health appointments cancelled by provider
+```{r}
+a<-as.data.frame(svymean(~medaptcan_all_comb_MH, design=svy_I, na.rm=TRUE))
+a$percent<-a$mean*100
+a$Variable <- row.names(a)
+
+b<-as.data.frame(confint(svymean(~medaptcan_all_comb_MH, design=svy_I, na.rm=TRUE)))  
+b$lowCI<-b$`2.5 %`*100
+b$highCI<-b$`97.5 %`*100
+b$Variable <- row.names(b)
+
+c<-as.data.frame(svymean(~medaptcantype_comb_MH, design=svy_I, na.rm=TRUE))
+c$percent<-c$mean*100
+c$Variable <- row.names(c)
+
+d<-as.data.frame(confint(svymean(~medaptcantype_comb_MH, design=svy_I, na.rm=TRUE)))  
+d$lowCI<-d$`2.5 %`*100
+d$highCI<-d$`97.5 %`*100
+d$Variable <- row.names(d)
+
+e<-as.data.frame(svymean(~medaptcantype_comb_MHp, design=svy_I, na.rm=TRUE))
+e$percent<-e$mean*100
+e$Variable <- row.names(e)
+
+f<-as.data.frame(confint(svymean(~medaptcantype_comb_MHp, design=svy_I, na.rm=TRUE)))  
+f$lowCI<-f$`2.5 %`*100
+f$highCI<-f$`97.5 %`*100
+f$Variable <- row.names(f)
+table(exc_ex$medaptcantype_comb_MHp)
+```
+
+## Dermatology appointments cancelled by provider
+```{r}
+a<-as.data.frame(svymean(~medaptcan_all_comb_derm, design=svy_I, na.rm=TRUE))
+a$percent<-a$mean*100
+a$Variable <- row.names(a)
+
+b<-as.data.frame(confint(svymean(~medaptcan_all_comb_derm, design=svy_I, na.rm=TRUE)))  
+b$lowCI<-b$`2.5 %`*100
+b$highCI<-b$`97.5 %`*100
+b$Variable <- row.names(b)
+
+c<-as.data.frame(svymean(~medaptcantype_comb_derm, design=svy_I, na.rm=TRUE))
+c$percent<-c$mean*100
+c$Variable <- row.names(c)
+
+d<-as.data.frame(confint(svymean(~medaptcantype_comb_derm, design=svy_I, na.rm=TRUE)))  
+d$lowCI<-d$`2.5 %`*100
+d$highCI<-d$`97.5 %`*100
+d$Variable <- row.names(d)
+
+e<-as.data.frame(svymean(~medaptcantype_comb_dermp, design=svy_I, na.rm=TRUE))
+e$percent<-e$mean*100
+e$Variable <- row.names(e)
+
+f<-as.data.frame(confint(svymean(~medaptcantype_comb_dermp, design=svy_I, na.rm=TRUE)))  
+f$lowCI<-f$`2.5 %`*100
+f$highCI<-f$`97.5 %`*100
+f$Variable <- row.names(f)
+```
+
+# Table 4: Oncology appointments cancelled by provider
+```{r}
+a<-as.data.frame(svymean(~medaptcan_all_comb_onc, design=svy_I, na.rm=TRUE))
+a$percent<-a$mean*100
+a$Variable <- row.names(a)
+
+b<-as.data.frame(confint(svymean(~medaptcan_all_comb_onc, design=svy_I, na.rm=TRUE)))  
+b$lowCI<-b$`2.5 %`*100
+b$highCI<-b$`97.5 %`*100
+b$Variable <- row.names(b)
+
+c<-as.data.frame(svymean(~medaptcantype_comb_onc, design=svy_I, na.rm=TRUE))
+c$percent<-c$mean*100
+c$Variable <- row.names(c)
+
+d<-as.data.frame(confint(svymean(~medaptcantype_comb_onc, design=svy_I, na.rm=TRUE)))  
+d$lowCI<-d$`2.5 %`*100
+d$highCI<-d$`97.5 %`*100
+d$Variable <- row.names(d)
+
+e<-as.data.frame(svymean(~medaptcantype_comb_oncp, design=svy_I, na.rm=TRUE))
+e$percent<-e$mean*100
+e$Variable <- row.names(e)
+
+f<-as.data.frame(confint(svymean(~medaptcantype_comb_oncp, design=svy_I, na.rm=TRUE)))  
+f$lowCI<-f$`2.5 %`*100
+f$highCI<-f$`97.5 %`*100
+f$Variable <- row.names(f)
+```
+
+##  Table 4: Other speciality
+```{r}
+a<-as.data.frame(svymean(~medaptcan_all_comb_othspe, design=svy_I, na.rm=TRUE))
+a$percent<-a$mean*100
+a$Variable <- row.names(a)
+
+b<-as.data.frame(confint(svymean(~medaptcan_all_comb_othspe, design=svy_I, na.rm=TRUE)))  
+b$lowCI<-b$`2.5 %`*100
+b$highCI<-b$`97.5 %`*100
+b$Variable <- row.names(b)
+
+c<-as.data.frame(svymean(~medaptcantype_comb_othspe, design=svy_I, na.rm=TRUE))
+c$percent<-c$mean*100
+c$Variable <- row.names(c)
+
+d<-as.data.frame(confint(svymean(~medaptcantype_comb_othspe, design=svy_I, na.rm=TRUE)))  
+d$lowCI<-d$`2.5 %`*100
+d$highCI<-d$`97.5 %`*100
+d$Variable <- row.names(d)
+
+e<-as.data.frame(svymean(~medaptcantype_comb_othspep, design=svy_I, na.rm=TRUE))
+e$percent<-e$mean*100
+e$Variable <- row.names(e)
+
+f<-as.data.frame(confint(svymean(~medaptcantype_comb_othspep, design=svy_I, na.rm=TRUE)))  
+f$lowCI<-f$`2.5 %`*100
+f$highCI<-f$`97.5 %`*100
+f$Variable <- row.names(f)
+```
+
+## Table 4: PT
+```{r}
+a<-as.data.frame(svymean(~medaptcan_all_comb_PT, design=svy_I, na.rm=TRUE))
+a$percent<-a$mean*100
+a$Variable <- row.names(a)
+
+b<-as.data.frame(confint(svymean(~medaptcan_all_comb_PT, design=svy_I, na.rm=TRUE)))  
+b$lowCI<-b$`2.5 %`*100
+b$highCI<-b$`97.5 %`*100
+b$Variable <- row.names(b)
+
+c<-as.data.frame(svymean(~medaptcantype_comb_PT, design=svy_I, na.rm=TRUE))
+c$percent<-c$mean*100
+c$Variable <- row.names(c)
+
+d<-as.data.frame(confint(svymean(~medaptcantype_comb_PT, design=svy_I, na.rm=TRUE)))  
+d$lowCI<-d$`2.5 %`*100
+d$highCI<-d$`97.5 %`*100
+d$Variable <- row.names(d)
+
+e<-as.data.frame(svymean(~medaptcantype_comb_PTp, design=svy_I, na.rm=TRUE))
+e$percent<-e$mean*100
+e$Variable <- row.names(e)
+
+f<-as.data.frame(confint(svymean(~medaptcantype_comb_PTp, design=svy_I, na.rm=TRUE)))  
+f$lowCI<-f$`2.5 %`*100
+f$highCI<-f$`97.5 %`*100
+f$Variable <- row.names(f)
+```
+
+## Table 4: Dental
+```{r}
+a<-as.data.frame(svymean(~medaptcan_all_comb_dent, design=svy_I, na.rm=TRUE))
+a$percent<-a$mean*100
+a$Variable <- row.names(a)
+
+b<-as.data.frame(confint(svymean(~medaptcan_all_comb_dent, design=svy_I, na.rm=TRUE)))  
+b$lowCI<-b$`2.5 %`*100
+b$highCI<-b$`97.5 %`*100
+b$Variable <- row.names(b)
+
+c<-as.data.frame(svymean(~medaptcantype_comb_dent, design=svy_I, na.rm=TRUE))
+c$percent<-c$mean*100
+c$Variable <- row.names(c)
+
+d<-as.data.frame(confint(svymean(~medaptcantype_comb_dent, design=svy_I, na.rm=TRUE)))  
+d$lowCI<-d$`2.5 %`*100
+d$highCI<-d$`97.5 %`*100
+d$Variable <- row.names(d)
+
+e<-as.data.frame(svymean(~medaptcantype_comb_dentp, design=svy_I, na.rm=TRUE))
+e$percent<-e$mean*100
+e$Variable <- row.names(e)
+
+f<-as.data.frame(confint(svymean(~medaptcantype_comb_dentp, design=svy_I, na.rm=TRUE)))  
+f$lowCI<-f$`2.5 %`*100
+f$highCI<-f$`97.5 %`*100
+f$Variable <- row.names(f)
+```
+
+## Table 4: Eye
+```{r}
+a<-as.data.frame(svymean(~medaptcan_all_comb_eye, design=svy_I, na.rm=TRUE))
+a$percent<-a$mean*100
+a$Variable <- row.names(a)
+
+b<-as.data.frame(confint(svymean(~medaptcan_all_comb_eye, design=svy_I, na.rm=TRUE)))  
+b$lowCI<-b$`2.5 %`*100
+b$highCI<-b$`97.5 %`*100
+b$Variable <- row.names(b)
+
+c<-as.data.frame(svymean(~medaptcantype_comb_eye, design=svy_I, na.rm=TRUE))
+c$percent<-c$mean*100
+c$Variable <- row.names(c)
+
+d<-as.data.frame(confint(svymean(~medaptcantype_comb_eye, design=svy_I, na.rm=TRUE)))  
+d$lowCI<-d$`2.5 %`*100
+d$highCI<-d$`97.5 %`*100
+d$Variable <- row.names(d)
+
+e<-as.data.frame(svymean(~medaptcantype_comb_eyep, design=svy_I, na.rm=TRUE))
+e$percent<-e$mean*100
+e$Variable <- row.names(e)
+
+f<-as.data.frame(confint(svymean(~medaptcantype_comb_eyep, design=svy_I, na.rm=TRUE)))  
+f$lowCI<-f$`2.5 %`*100
+f$highCI<-f$`97.5 %`*100
+f$Variable <- row.names(f)
+```
+
+## Table 4: Other
+```{r}
+
+a<-as.data.frame(svymean(~medaptcan_all_comb_oth, design=svy_I, na.rm=TRUE))
+a$percent<-a$mean*100
+a$Variable <- row.names(a)
+
+b<-as.data.frame(confint(svymean(~medaptcan_all_comb_oth, design=svy_I, na.rm=TRUE)))  
+b$lowCI<-b$`2.5 %`*100
+b$highCI<-b$`97.5 %`*100
+b$Variable <- row.names(b)
+
+c<-as.data.frame(svymean(~medaptcantype_comb_oth, design=svy_I, na.rm=TRUE))
+c$percent<-c$mean*100
+c$Variable <- row.names(c)
+
+d<-as.data.frame(confint(svymean(~medaptcantype_comb_oth, design=svy_I, na.rm=TRUE)))  
+d$lowCI<-d$`2.5 %`*100
+d$highCI<-d$`97.5 %`*100
+d$Variable <- row.names(d)
+
+e<-as.data.frame(svymean(~medaptcantype_comb_othp, design=svy_I, na.rm=TRUE))
+e$percent<-e$mean*100
+e$Variable <- row.names(e)
+
+f<-as.data.frame(confint(svymean(~medaptcantype_comb_othp, design=svy_I, na.rm=TRUE)))  
+f$lowCI<-f$`2.5 %`*100
+f$highCI<-f$`97.5 %`*100
+f$Variable <- row.names(f)
+```
+
+## Table 4:  Unsure
+```{r}
+
+a<-as.data.frame(svymean(~medaptcan_all_comb_unsure, design=svy_I, na.rm=TRUE))
+a$percent<-a$mean*100
+a$Variable <- row.names(a)
+
+b<-as.data.frame(confint(svymean(~medaptcan_all_comb_unsure, design=svy_I, na.rm=TRUE)))  
+b$lowCI<-b$`2.5 %`*100
+b$highCI<-b$`97.5 %`*100
+b$Variable <- row.names(b)
+
+
+c<-as.data.frame(svymean(~medaptcantype_comb_unsure, design=svy_I, na.rm=TRUE))
+c$percent<-c$mean*100
+c$Variable <- row.names(c)
+
+d<-as.data.frame(confint(svymean(~medaptcantype_comb_unsure, design=svy_I, na.rm=TRUE)))  
+d$lowCI<-d$`2.5 %`*100
+d$highCI<-d$`97.5 %`*100
+d$Variable <- row.names(d)
+
+e<-as.data.frame(svymean(~medaptcantype_comb_unsurep, design=svy_I, na.rm=TRUE))
+e$percent<-e$mean*100
+e$Variable <- row.names(e)
+
+f<-as.data.frame(confint(svymean(~medaptcantype_comb_unsurep, design=svy_I, na.rm=TRUE)))  
+f$lowCI<-f$`2.5 %`*100
+f$highCI<-f$`97.5 %`*100
+f$Variable <- row.names(f)
+```
+
+## Table 5: Health services--ER Avoidance
+```{r}
+a<-as.data.frame(svymean(~ERavoid, design=svy_I))
+a$percent<-a$mean*100
+a$Variable <- row.names(a)
+
+b<-as.data.frame(confint(svymean(~ERavoid, design=svy_I)))
+b$lowCI<-b$`2.5 %`*100
+b$highCI<-b$`97.5 %`*100
+b$Variable <- row.names(b)
+
+##stratified by race
+c<-as.data.frame(svyby(~ERavoid, ~Race_cat2_I, design=svy_I, svymean))
+c$avoid<-c$`ERavoidWould avoid ER due to COVID-19 concerns`*100
+c$Notavoid<-c$`ERavoidWould not/unsure avoid ER due to COVID-19 concerns`*100
+
+#colnames(a)[1]<-"Variable"
+d<-as.data.frame(confint(svyby(~ERavoid, ~Race_cat2_I, design=svy_I, svymean)))
+d$lowCI<-d$`2.5 %`*100
+d$highCI<-d$`97.5 %`*100
+d$Variable <- row.names(d)
+
+chiR<-svychisq(~ERavoid + Race_cat2_I, statistic="Wald", svy_I)
+chiR
+
+##stratified by age
+e<-as.data.frame(svyby(~ERavoid, ~age_cat, design=svy_I,  svymean))
+e$avoid<-e$`ERavoidWould avoid ER due to COVID-19 concerns`*100
+e$Notavoid<-e$`ERavoidWould not/unsure avoid ER due to COVID-19 concerns`*100
+
+#colnames(a)[1]<-"Variable"
+f<-as.data.frame(confint(svyby(~ERavoid, ~age_cat, design=svy_I,  svymean)))
+f$lowCI<-f$`2.5 %`*100
+f$highCI<-f$`97.5 %`*100
+f$Variable <- row.names(f)
+
+chiage<-svychisq(~ERavoid + age_cat, statistic="Wald",  svy_I)
+chiage
+
+##stratified by sex
+
+g<-as.data.frame(svyby(~ERavoid, ~SEX_I, design=svy_I, svymean))
+g$avoid<-g$`ERavoidWould avoid ER due to COVID-19 concerns`*100
+g$Notavoid<-g$`ERavoidWould not/unsure avoid ER due to COVID-19 concerns`*100
+
+#colnames(a)[1]<-"Variable"
+h<-as.data.frame(confint(svyby(~ERavoid, ~SEX_I, design=svy_I, svymean)))
+h$lowCI<-h$`2.5 %`*100
+h$highCI<-h$`97.5 %`*100
+h$Variable <- row.names(h)
+chisex<-svychisq(~ERavoid + SEX_I, statistic="Wald", svy_I)
+chisex
+
+#Stratify by respondent health
+i<-as.data.frame(svyby(~ERavoid, ~genhealth, design=svy_I, svymean))
+i$avoid<-i$`ERavoidWould avoid ER due to COVID-19 concerns`*100
+i$Notavoid<-i$`ERavoidWould not/unsure avoid ER due to COVID-19 concerns`*100
+
+j<-as.data.frame(confint(svyby(~ERavoid, ~genhealth, design=svy_I, svymean)))
+j$lowCI<-j$`2.5 %`*100
+j$highCI<-j$`97.5 %`*100
+j$Variable <- row.names(j)
+rownames(j)<- c()
+j<-j[-c(4),]
+rownames(j)<- c()
+
+chiRH<-svychisq(~ERavoid + genhealth, statistic="Wald", svy_I)
+chiRH
+
+#Stratify by health insurance
+k<-as.data.frame(svyby(~ERavoid, ~INSURANCE_I, design=svy_I, svymean))
+k$avoid<-k$`ERavoidWould avoid ER due to COVID-19 concerns`*100
+k$Notavoid<-k$`ERavoidWould not/unsure avoid ER due to COVID-19 concerns`*100
+
+#colnames(a)[1]<-"Variable"
+l<-as.data.frame(confint(svyby(~ERavoid, ~INSURANCE_I, design=svy_I, svymean)))
+l$lowCI<-l$`2.5 %`*100
+l$highCI<-l$`97.5 %`*100
+l$Variable <- row.names(l)
+
+chiins<-svychisq(~ERavoid + INSURANCE_I, statistic="Wald",svy_I)
+chiins
+
+#Stratify by UMC scorecat
+m<-as.data.frame(svyby(~ERavoid, ~UMC_scorecat, design=svy_I, svymean))
+m$avoid<-m$`ERavoidWould avoid ER due to COVID-19 concerns`*100
+m$Notavoid<-m$`ERavoidWould not/unsure avoid ER due to COVID-19 concerns`*100
+
+#colnames(a)[1]<-"Variable"
+n<-as.data.frame(confint(svyby(~ERavoid, ~UMC_scorecat, design=svy_I, svymean)))
+n$lowCI<-n$`2.5 %`*100
+n$highCI<-n$`97.5 %`*100
+n$Variable <- row.names(n)
+
+chiUMC<-svychisq(~ERavoid + UMC_scorecat,statistic="Wald", svy_I)
+chiUMC
+
+
+table5<-data.frame(matrix(ncol=8, nrow=0))
+columns<-c("Variable", "Yes", "LowerCI", "UpperCI", "No", "LowerCIN", "UpperCIN", "P-value")
+colnames(table5)<-columns
+table5[1,]<-c("Overall", a[1,3], b[1,3], b[1,4], a[2,3], b[2,3], b[2,4], "NA") 
+table5[2,]<-c("White",   c[1,6], d[1,3], d[1,4], c[1,7], d[3,3], d[3,4], chiR$p.value)
+table5[3,]<-c("Black/Other", c[2,6], d[2,3], d[2,4], c[2,7], d[4,3], d[4,4], chiR$p.value) 
+table5[4,]<-c("<40", e[1,6], f[1,3], f[1,4], c[1,7], f[4,3], f[4,4], chiage$p.value) 
+table5[5,]<-c("40-60", e[2,6], f[2,3], f[2,4], e[2,7], f[5,3], f[5,4], chiage$p.value) 
+table5[6,]<-c(">60", e[3,6], f[3,3], f[3,4], e[3,7], f[6,3], f[6,4], chiage$p.value) 
+table5[7,]<-c("Male", g[1,6], h[1,3], h[1,4], g[1,7], h[3,3], h[3,4], chisex$p.value)
+table5[8,]<-c("Female", g[2,6], h[2,3], h[2,4], g[2,7], h[4,3], h[4,4],chisex$p.value) 
+table5[9,]<-c("Excellent/Very good", i[1,6], j[1,3], j[1,4], i[1,7], j[3,3], j[3,4], chiRH$p.value)
+table5[10,]<-c("Good", i[2,6], j[2,3], j[2,4], i[2,7], j[5,3], j[5,4], chiRH$p.value)
+table5[11,]<-c("Fair/Poor", i[3,6], j[3,3], j[3,4], i[3,7], j[6,3], j[6,4], chiRH$p.value)
+table5[12,]<-c("Has insurance", k[2,6], l[2,3], l[2,4], k[2,7], l[4,3], l[4,4], chiins$p.value) 
+table5[13,]<-c("Does not have insurance", k[1,6], l[1,3], l[1,4], k[1,7], l[3,3], l[3,4], chiins$p.value) 
+table5[14,]<-c("No Medical conditions", m[1,6], n[1,3], n[1,4], m[1,7], n[4,3], n[4,4], chiUMC$p.value) 
+table5[15,]<-c("One Medical condition", m[2,6], n[2,3], n[2,4], m[2,7], n[5,3], n[5,4], chiUMC$p.value) 
+table5[16,]<-c(">1 Medical condition", m[3,6], n[3,3], n[3,4], m[3,7], n[6,3], n[6,4], chiUMC$p.value)
+
+table5$Yes<-round(as.numeric(table5$Yes), digit=2)
+table5$LowerCI<-round(as.numeric(table5$LowerCI), digit=2)
+table5$UpperCI<-round(as.numeric(table5$UpperCI), digit=2)
+table5$No<-round(as.numeric(table5$No), digit=2)
+table5$LowerCIN<-round(as.numeric(table5$LowerCIN), digit=2)
+table5$UpperCIN<-round(as.numeric(table5$UpperCIN), digit=2)
+table5$`P-value`<-as.numeric(table5$`P-value`)
+#table5[,-1] <-round(table5[,-1],3) #the "-1" excludes column 1
+table5
+
+table5[1,9]<-paste(table5[1,2],"","(",table5[1,3],"to",table5[1,4], ")")
+table5[1,10]<-paste(table5[1,5], "", "(", table5[1,6], "to", table5[1,7], ")")
+table5[2,9]<-paste(table5[2,2], "", "(", table5[2,3], "to", table5[2,4], ")")
+table5[2,10]<-paste(table5[2,5], "", "(", table5[2,6], "to", table5[2,7], ")")
+table5[3,9]<-paste(table5[3,2], "", "(", table5[3,3], "to", table5[3,4], ")")
+table5[3,10]<-paste(table5[3,5], "", "(", table5[3,6], "to", table5[3,7], ")")
+table5[4,9]<-paste(table5[4,2], "", "(", table5[4,3], "to", table5[4,4], ")")
+table5[4,10]<-paste(table5[4,5], "", "(", table5[4,6], "to", table5[4,7], ")")
+table5[5,9]<-paste(table5[5,2], "", "(", table5[5,3], "to", table5[5,4], ")")
+table5[5,10]<-paste(table5[5,5], "", "(", table5[5,6], "to", table5[5,7], ")")
+table5[6,9]<-paste(table5[6,2], "", "(", table5[6,3], "to", table5[6,4], ")")
+table5[6,10]<-paste(table5[6,5], "", "(", table5[6,6], "to", table5[6,7], ")")
+table5[7,9]<-paste(table5[7,2], "", "(", table5[7,3], "to", table5[7,4], ")")
+table5[7,10]<-paste(table5[7,5], "", "(", table5[7,6], "to", table5[7,7], ")")
+table5[8,9]<-paste(table5[8,2], "", "(", table5[8,3], "to", table5[8,4], ")")
+table5[8,10]<-paste(table5[8,5], "", "(", table5[8,6], "to", table5[8,7], ")")
+table5[9,9]<-paste(table5[9,2], "", "(", table5[9,3], "to", table5[9,4], ")")
+table5[9,10]<-paste(table5[9,5], "", "(", table5[9,6], "to", table5[9,7], ")")
+table5[10,9]<-paste(table5[10,2], "", "(", table5[10,3], "to", table5[10,4], ")")
+table5[10,10]<-paste(table5[10,5], "", "(", table5[10,6], "to", table5[10,7], ")")
+table5[11,9]<-paste(table5[11,2], "", "(", table5[11,3], "to", table5[11,4], ")")
+table5[11,10]<-paste(table5[11,5], "", "(", table5[11,6], "to", table5[11,7], ")")
+table5[12,9]<-paste(table5[12,2], "", "(", table5[12,3], "to", table5[12,4], ")")
+table5[12,10]<-paste(table5[12,5], "", "(", table5[12,6], "to", table5[12,7], ")")
+table5[13,9]<-paste(table5[13,2], "", "(", table5[13,3], "to", table5[13,4], ")")
+table5[13,10]<-paste(table5[13,5], "", "(", table5[13,6], "to", table5[13,7], ")")
+table5[14,9]<-paste(table5[14,2], "", "(", table5[14,3], "to", table5[14,4], ")")
+table5[14,10]<-paste(table5[14,5], "", "(", table5[14,6], "to", table5[14,7], ")")
+table5[15,9]<-paste(table5[15,2], "", "(", table5[15,3], "to", table5[15,4], ")")
+table5[15,10]<-paste(table5[15,5], "", "(", table5[15,6], "to", table5[15,7], ")")
+table5[16,9]<-paste(table5[16,2], "", "(", table5[16,3], "to", table5[16,4], ")")
+table5[16,10]<-paste(table5[16,5], "", "(", table5[16,6], "to", table5[16,7], ")")
+
+
+names(table5)[9]<-"Prevalence (yes) (95% CI)"
+names(table5)[10]<-"Prevalence (no) (95% CI)"
+
+table5s<-subset(table5, select=c(Variable,`Prevalence (yes) (95% CI)`,  `P-value`))
+
+write_xlsx(table5s,"/Users/kijohnson/Box/A_T Drive - kjohnson/Research/Projects/CoronaVirus/STL CO COVID health services survey paper/table5s.xlsx")
+```
+
+## Figure 2: Predictors of ER avoidance
+```{r}
+## Set up predictive model
+#recode ERavoid as 0 1
+
+exc_ex$ERavoid_rc<-ifelse(exc_ex$ERavoid==c("Would avoid ER due to COVID-19 concerns"), 1, 0)
+
+table(exc_ex$ERavoid, useNA="always")
+
+table(exc_ex$ERavoid_rc)
+class(exc_ex$ERavoid_rc)
+svy_I<-svydesign(id=~1, weights=~Survey_Weight, data=exc_ex)
+
+mysvyglmp <- svyglm(ERavoid_rc~ SEX_I + Race_cat2_I +age_cat2 ++UMC_scorecat + as.factor(INSURANCE_I) + as.factor(genhealth) , family=poisson, svy_I)
+summary(mysvyglmp)
+options(digits=3)
+
+
+summ(mysvyglmp, confint=TRUE, exp=TRUE)
+```
+
+## Supplementary table 4: Reasons for avoiding ER-Concern for COVID 
+```{r}
+table(exc_ex$ERavoid_why)
+
+svy_I_s<-svydesign(id=~1, weights=~Survey_Weight, data=exc_ex)
+sub<-subset(svy_I_s, !is.na(ERavoid_why))
+a<-as.data.frame(svymean(~ERavoid_why, design=sub))
+a$percent<-a$mean*100
+a$Variable <- row.names(a)
+a$lowCI<-(a$mean - 1.96*a$SE)*100
+a$highCI<-(a$mean + 1.96*a$SE)*100
+
+print(a)
+```
+
+## Figure 2: Forest plot
+```{r}
+
+
+test<-
+  structure(list(
+    PR =    c(NA, NA, NA, NA, 1.44, NA, NA,  1.02, NA, NA, 0.93, 0.72, NA, NA, 1.03, 1.12, NA, NA,  1.37, NA, NA,  1.26, 1.19),
+    lower = c(NA, NA, NA, NA, 1.11, NA, NA, 0.79, NA, NA,  0.69, 0.52, NA, NA,  0.78, 0.76, NA, NA, 0.82, NA, NA, 0.91, 0.84),
+    upper = c(NA, NA, NA, NA,  1.87, NA,  NA, 1.32, NA, NA, 1.24, 1.0, NA, NA, 1.38, 1.65, NA, NA, 2.29, NA, NA, 1.73, 1.67)),
+    .Names=c("PR", "lower CI", "upper CI"),
+    row.names=c(NA, -24L),
+    class="data.frame")
+    
+tabletext <- cbind(
+  c(" ", "Variable", " ", "Sex",  "Female vs. Male", NA, "Race", "  Black/Other vs. White",  NA, "Age group (years)", "  45-64 vs. 18-44", "  ≥65 vs. 18-44", NA, "General health",  "  Good vs. Excellent/Very good", "  Fair/Poor vs. Excellent/Very good", NA,  "Insurance status",  "  Insured vs. Uninsured/Unsure", NA, "Medical conditions",  "  1 vs. 0", "  >1 vs. 0"),
+  c("PR (95% CI)", NA,  NA,NA, "1.44 (1.11 to 1.87)", NA, NA, "1.02 (0.79 to 1.32)",
+   NA, NA,   "0.93 (0.69 to 1.24)", "0.72 (0.52 to 1.00)", NA, NA, "1.03 (0.78 to 1.38)", "1.12 (0.76 to 1.65)", NA, NA,  "1.37 (0.82 to 2.29)", NA, NA, "1.26 (0.91 to 1.73)", "1.19 (0.84 to 1.67)"))
+
+
+pdf("/Users/kijohnson/Box/A_T Drive - kjohnson/Research/Projects/CoronaVirus/STL CO COVID health services survey paper/Figure2.pdf")
+
+forestplot(tabletext, 
+           boxsize=0.5,
+           test,new_page = TRUE,
+           is.summary = c(TRUE,TRUE,TRUE,TRUE, FALSE, FALSE, TRUE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, TRUE, FALSE, FALSE),
+           xlab="PR",
+           txt_gp = fpTxtGp(ticks=gpar(cex=0.8),  xlab=gpar(cex=1.0), label=gpar(font="bold")),
+           xlog = TRUE, 
+           col = fpColors(box = "blue",
+                          line = "black"))
+dev.off()
+```
