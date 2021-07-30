@@ -7,8 +7,10 @@ output: html_document
 
 ## Open libraries and Import data
 ```{r}
+library(writexl)
 library(survey)
 library(readr)
+library(haven)
 library("ggplot2")
 library(tidyverse)        #data management/visulizaiton
 library(RColorBrewer)     #ggplot colors
@@ -1039,7 +1041,7 @@ exc_ex<-stltestsurv[keeps]
 
 ```
 
-## Numbers for figure 1
+## Numbers for Supplementary figure 1
 ```{r}
 flowvars<-read_sas("/Users/kijohnson/Box/COVID Survey Shared Data/Newest data/MSG Weighted Dataset July 12, 2021 (Final)/flowvars.sas7bdat")
 
@@ -1051,16 +1053,20 @@ table(data$ELIGIBLE)
 write_csv(data, "data_completed_notreached.csv")
 #recode those who have reached=0 and completed=1 as reached
 
-#correct errors for 180 listed as completed but not reached
-flowvars$Reached<-ifelse(flowvars$REACHED==0 & flowvars$COMPLETED==1, flowvars$REACHED==1, 0)
-table(flowvars$Reached, flowvars$ELIGIBLE)
+table(flowvars$REACHED, flowvars$DIRECT_REFUSALS)
 
-del0<-flowvars[which(flowvars$REACHED==1),]
-del1<-flowvars[which(flowvars$ELIGIBLE==1),]
-del2<-del1[which(del1$COMPLETED==1),]
+#correct errors for 180 listed as completed but not reached
+table(flowvars$REACHED, flowvars$ELIGIBLE)
+flowvars$Reached<-ifelse(flowvars$REACHED==1, 1, ifelse(flowvars$REACHED==0 & (flowvars$ELIGIBLE==1|flowvars$NOT_ELIGIBLE==1|flowvars$ASKED==1|flowvars$REFUSED==1|flowvars$REFUSED_PII_GENERAL==1|flowvars$REFUSED_PII_SCHEDULED==1|flowvars$COMPLETED==1|flowvars$DEMO_CORE_COMPLETED==1|flowvars$DROPOFF==1|flowvars$DIRECT_REFUSALS==1), 1, 0))
+table(flowvars$Reached)
+
+
+del0<-flowvars[which(flowvars$REACHED==1),] #121423
+del1<-flowvars[which(flowvars$ELIGIBLE==1),] #4994
+del2<-del1[which(del1$COMPLETED==1),] #2314
 ```
 
-## Table 2 Characteristics of the study population
+## Table 1 Characteristics of the study population
 ```{r}
 
 library(table1)
@@ -1068,9 +1074,9 @@ table1(~SEX_I + as.factor(RACE_I) + age_cat2 + marital +education, exc_ex)
 
 ```
 
-# Supplementary Table 1-3 Unweighted prevalences
+# Supplementary Tables Unweighted prevalences
 ```{r}
-#S1
+#S2
 table1(~Race_cat2_I + age_cat2 + SEX_I +genhealth+INSURANCE_I +UMC_scorecat|medaptcan_all,  exc_ex)
 table1(~Race_cat2_I + age_cat2 + SEX_I +genhealth+INSURANCE_I +UMC_scorecat|medaptcan, exc_ex)
 table1(~Race_cat2_I + age_cat2 + SEX_I +genhealth+INSURANCE_I +UMC_scorecat|medaptcan_p, exc_ex)
@@ -1079,14 +1085,14 @@ table1(~medaptcan_all, exc_ex)
 table1(~medaptcan, exc_ex)
 table1(~medaptcan_p, exc_ex)
 
-#S2
+#S4
 table1(~medaptcan_all_comb_canscreen + medaptcan_all_comb_PC + medaptcan_all_comb_ESP + medaptcan_all_comb_MH + medaptcan_all_comb_derm + medaptcan_all_comb_onc + medaptcan_all_comb_oth + medaptcan_all_comb_PT +medaptcan_all_comb_dent + medaptcan_all_comb_eye + medaptcan_all_comb_othspe + medaptcan_all_comb_unsure, exc_ex)
 
 table1(~medaptcantype_comb_canscreen +  medaptcantype_comb_PC + medaptcantype_comb_ESP + medaptcantype_comb_MH +medaptcantype_comb_derm + medaptcantype_comb_onc + medaptcantype_comb_oth + medaptcantype_comb_PT + medaptcantype_comb_dent + medaptcantype_comb_eye + medaptcantype_comb_othspe + medaptcantype_comb_unsure, exc_ex)
 
 table1(~medaptcantype_comb_canscreenp +  medaptcantype_comb_PCp + medaptcantype_comb_ESPp + medaptcantype_comb_MHp +medaptcantype_comb_dermp + medaptcantype_comb_oncp + medaptcantype_comb_othp + medaptcantype_comb_PTp + medaptcantype_comb_dentp + medaptcantype_comb_eyep + medaptcantype_comb_othspep + medaptcantype_comb_unsurep, exc_ex)
 
-#S3
+#S6
 table1(~Race_cat2_I + age_cat2 + SEX_I +genhealth+INSURANCE_I +UMC_scorecat|ERavoid,  exc_ex)
 table1(~ERavoid,  exc_ex)
 ```
@@ -1197,76 +1203,76 @@ n$Variable <- row.names(n)
 
 chiUMC<-svychisq(~medaptcan + UMC_scorecat,statistic="Wald", svy_I)
 chiUMC
-
-Table3pro<-data.frame(matrix(ncol=8, nrow=0))
+Table2pro<-data.frame(matrix(ncol=8, nrow=0))
 columns<-c("Variable", "Yes", "LowerCI", "UpperCI", "No", "LowerCIN", "UpperCIN", "P-value")
-colnames(Table3pro)<-columns
-Table3pro[1,]<-c("Overall", a[1,3], b[1,3], b[1,4], a[2,3], b[2,3], b[2,4], "NA") 
-Table3pro[2,]<-c("White",   c[1,6], d[1,3], d[1,4], c[1,7], d[3,3], d[3,4], chiR$p.value)
-Table3pro[3,]<-c("Black/Other", c[2,6], d[2,3], d[2,4], c[2,7], d[4,3], d[4,4], chiR$p.value) 
-Table3pro[4,]<-c("18-44", e[1,6], f[1,3], f[1,4], c[1,7], f[4,3], f[4,4], chiage$p.value) 
-Table3pro[5,]<-c("45-64", e[2,6], f[2,3], f[2,4], e[2,7], f[5,3], f[5,4], chiage$p.value) 
-Table3pro[6,]<-c(">65", e[3,6], f[3,3], f[3,4], e[3,7], f[6,3], f[6,4], chiage$p.value) 
-Table3pro[7,]<-c("Female", g[1,6], h[1,3], h[1,4], g[1,7], h[3,3], h[3,4], chisex$p.value)
-Table3pro[8,]<-c("Male", g[2,6], h[2,3], h[2,4], g[2,7], h[4,3], h[4,4],chisex$p.value) 
-Table3pro[9,]<-c("Excellent/Very good", i[1,6], j[1,3], j[1,4], i[1,7], j[3,3], j[3,4], chiRH$p.value)
-Table3pro[10,]<-c("Good", i[2,6], j[2,3], j[2,4], i[2,7], j[5,3], j[5,4], chiRH$p.value)
-Table3pro[11,]<-c("Fair/Poor", i[3,6], j[3,3], j[3,4], i[3,7], j[6,3], j[6,4], chiRH$p.value)
-Table3pro[12,]<-c("Has insurance", k[2,6], l[2,3], l[2,4], k[2,7], l[4,3], l[4,4], chiins$p.value) 
-Table3pro[13,]<-c("Does not have insurance", k[1,6], l[1,3], l[1,4], k[1,7], l[3,3], l[3,4], chiins$p.value) 
-Table3pro[14,]<-c("No Medical conditions", m[1,6], n[1,3], n[1,4], m[1,7], n[4,3], n[4,4], chiUMC$p.value) 
-Table3pro[15,]<-c("One Medical condition", m[2,6], n[2,3], n[2,4], m[2,7], n[5,3], n[5,4], chiUMC$p.value) 
-Table3pro[16,]<-c(">1 Medical condition", m[3,6], n[3,3], n[3,4], m[3,7], n[6,3], n[6,4], chiUMC$p.value) 
+colnames(Table2pro)<-columns
+Table2pro[1,]<-c("Overall", a[1,3], b[1,3], b[1,4], a[2,3], b[2,3], b[2,4], "NA") 
+Table2pro[2,]<-c("White",   c[1,6], d[1,3], d[1,4], c[1,7], d[3,3], d[3,4], chiR$p.value)
+Table2pro[3,]<-c("Black/Other", c[2,6], d[2,3], d[2,4], c[2,7], d[4,3], d[4,4], chiR$p.value) 
+Table2pro[4,]<-c("18-44", e[1,6], f[1,3], f[1,4], c[1,7], f[4,3], f[4,4], chiage$p.value) 
+Table2pro[5,]<-c("45-64", e[2,6], f[2,3], f[2,4], e[2,7], f[5,3], f[5,4], chiage$p.value) 
+Table2pro[6,]<-c(">65", e[3,6], f[3,3], f[3,4], e[3,7], f[6,3], f[6,4], chiage$p.value) 
+Table2pro[7,]<-c("Female", g[1,6], h[1,3], h[1,4], g[1,7], h[3,3], h[3,4], chisex$p.value)
+Table2pro[8,]<-c("Male", g[2,6], h[2,3], h[2,4], g[2,7], h[4,3], h[4,4],chisex$p.value) 
+Table2pro[9,]<-c("Excellent/Very good", i[1,6], j[1,3], j[1,4], i[1,7], j[3,3], j[3,4], chiRH$p.value)
+Table2pro[10,]<-c("Good", i[2,6], j[2,3], j[2,4], i[2,7], j[5,3], j[5,4], chiRH$p.value)
+Table2pro[11,]<-c("Fair/Poor", i[3,6], j[3,3], j[3,4], i[3,7], j[6,3], j[6,4], chiRH$p.value)
+Table2pro[12,]<-c("Has insurance", k[2,6], l[2,3], l[2,4], k[2,7], l[4,3], l[4,4], chiins$p.value) 
+Table2pro[13,]<-c("Does not have insurance", k[1,6], l[1,3], l[1,4], k[1,7], l[3,3], l[3,4], chiins$p.value) 
+Table2pro[14,]<-c("No Medical conditions", m[1,6], n[1,3], n[1,4], m[1,7], n[4,3], n[4,4], chiUMC$p.value) 
+Table2pro[15,]<-c("One Medical condition", m[2,6], n[2,3], n[2,4], m[2,7], n[5,3], n[5,4], chiUMC$p.value) 
+Table2pro[16,]<-c(">1 Medical condition", m[3,6], n[3,3], n[3,4], m[3,7], n[6,3], n[6,4], chiUMC$p.value) 
 
-Table3pro$Yes<-round(as.numeric(Table3pro$Yes), digit=2)
-Table3pro$LowerCI<-round(as.numeric(Table3pro$LowerCI), digit=2)
-Table3pro$UpperCI<-round(as.numeric(Table3pro$UpperCI), digit=2)
-Table3pro$No<-round(as.numeric(Table3pro$No), digit=2)
-Table3pro$LowerCIN<-round(as.numeric(Table3pro$LowerCIN), digit=2)
-Table3pro$UpperCIN<-round(as.numeric(Table3pro$UpperCIN), digit=2)
-Table3pro$`P-value`<-as.numeric(Table3pro$`P-value`)
-
-
-Table3pro[1,9]<-paste(Table3pro[1,2],"","(",Table3pro[1,3],"to",Table3pro[1,4], ")")
-Table3pro[1,10]<-paste(Table3pro[1,5], "", "(", Table3pro[1,6], "to", Table3pro[1,7], ")")
-Table3pro[2,9]<-paste(Table3pro[2,2], "", "(", Table3pro[2,3], "to", Table3pro[2,4], ")")
-Table3pro[2,10]<-paste(Table3pro[2,5], "", "(", Table3pro[2,6], "to", Table3pro[2,7], ")")
-Table3pro[3,9]<-paste(Table3pro[3,2], "", "(", Table3pro[3,3], "to", Table3pro[3,4], ")")
-Table3pro[3,10]<-paste(Table3pro[3,5], "", "(", Table3pro[3,6], "to", Table3pro[3,7], ")")
-Table3pro[4,9]<-paste(Table3pro[4,2], "", "(", Table3pro[4,3], "to", Table3pro[4,4], ")")
-Table3pro[4,10]<-paste(Table3pro[4,5], "", "(", Table3pro[4,6], "to", Table3pro[4,7], ")")
-Table3pro[5,9]<-paste(Table3pro[5,2], "", "(", Table3pro[5,3], "to", Table3pro[5,4], ")")
-Table3pro[5,10]<-paste(Table3pro[5,5], "", "(", Table3pro[5,6], "to", Table3pro[5,7], ")")
-Table3pro[6,9]<-paste(Table3pro[6,2], "", "(", Table3pro[6,3], "to", Table3pro[6,4], ")")
-Table3pro[6,10]<-paste(Table3pro[6,5], "", "(", Table3pro[6,6], "to", Table3pro[6,7], ")")
-Table3pro[7,9]<-paste(Table3pro[7,2], "", "(", Table3pro[7,3], "to", Table3pro[7,4], ")")
-Table3pro[7,10]<-paste(Table3pro[7,5], "", "(", Table3pro[7,6], "to", Table3pro[7,7], ")")
-Table3pro[8,9]<-paste(Table3pro[8,2], "", "(", Table3pro[8,3], "to", Table3pro[8,4], ")")
-Table3pro[8,10]<-paste(Table3pro[8,5], "", "(", Table3pro[8,6], "to", Table3pro[8,7], ")")
-Table3pro[9,9]<-paste(Table3pro[9,2], "", "(", Table3pro[9,3], "to", Table3pro[9,4], ")")
-Table3pro[9,10]<-paste(Table3pro[9,5], "", "(", Table3pro[9,6], "to", Table3pro[9,7], ")")
-Table3pro[10,9]<-paste(Table3pro[10,2], "", "(", Table3pro[10,3], "to", Table3pro[10,4], ")")
-Table3pro[10,10]<-paste(Table3pro[10,5], "", "(", Table3pro[10,6], "to", Table3pro[10,7], ")")
-Table3pro[11,9]<-paste(Table3pro[11,2], "", "(", Table3pro[11,3], "to", Table3pro[11,4], ")")
-Table3pro[11,10]<-paste(Table3pro[11,5], "", "(", Table3pro[11,6], "to", Table3pro[11,7], ")")
-Table3pro[12,9]<-paste(Table3pro[12,2], "", "(", Table3pro[12,3], "to", Table3pro[12,4], ")")
-Table3pro[12,10]<-paste(Table3pro[12,5], "", "(", Table3pro[12,6], "to", Table3pro[12,7], ")")
-Table3pro[13,9]<-paste(Table3pro[13,2], "", "(", Table3pro[13,3], "to", Table3pro[13,4], ")")
-Table3pro[13,10]<-paste(Table3pro[13,5], "", "(", Table3pro[13,6], "to", Table3pro[13,7], ")")
-Table3pro[14,9]<-paste(Table3pro[14,2], "", "(", Table3pro[14,3], "to", Table3pro[14,4], ")")
-Table3pro[14,10]<-paste(Table3pro[14,5], "", "(", Table3pro[14,6], "to", Table3pro[14,7], ")")
-Table3pro[15,9]<-paste(Table3pro[15,2], "", "(", Table3pro[15,3], "to", Table3pro[15,4], ")")
-Table3pro[15,10]<-paste(Table3pro[15,5], "", "(", Table3pro[15,6], "to", Table3pro[15,7], ")")
-Table3pro[16,9]<-paste(Table3pro[16,2], "", "(", Table3pro[16,3], "to", Table3pro[16,4], ")")
-Table3pro[16,10]<-paste(Table3pro[16,5], "", "(", Table3pro[16,6], "to", Table3pro[16,7], ")")
+Table2pro$Yes<-round(as.numeric(Table2pro$Yes), digit=2)
+Table2pro$LowerCI<-round(as.numeric(Table2pro$LowerCI), digit=2)
+Table2pro$UpperCI<-round(as.numeric(Table2pro$UpperCI), digit=2)
+Table2pro$No<-round(as.numeric(Table2pro$No), digit=2)
+Table2pro$LowerCIN<-round(as.numeric(Table2pro$LowerCIN), digit=2)
+Table2pro$UpperCIN<-round(as.numeric(Table2pro$UpperCIN), digit=2)
+Table2pro$`P-value`<-as.numeric(Table2pro$`P-value`)
 
 
-names(Table3pro)[9]<-"Prevalence (yes) (95% CI)"
-names(Table3pro)[10]<-"Prevalence (no) (95% CI)"
+Table2pro[1,9]<-paste(Table2pro[1,2],"","(",Table2pro[1,3],"to",Table2pro[1,4], ")")
+Table2pro[1,10]<-paste(Table2pro[1,5], "", "(", Table2pro[1,6], "to", Table2pro[1,7], ")")
+Table2pro[2,9]<-paste(Table2pro[2,2], "", "(", Table2pro[2,3], "to", Table2pro[2,4], ")")
+Table2pro[2,10]<-paste(Table2pro[2,5], "", "(", Table2pro[2,6], "to", Table2pro[2,7], ")")
+Table2pro[3,9]<-paste(Table2pro[3,2], "", "(", Table2pro[3,3], "to", Table2pro[3,4], ")")
+Table2pro[3,10]<-paste(Table2pro[3,5], "", "(", Table2pro[3,6], "to", Table2pro[3,7], ")")
+Table2pro[4,9]<-paste(Table2pro[4,2], "", "(", Table2pro[4,3], "to", Table2pro[4,4], ")")
+Table2pro[4,10]<-paste(Table2pro[4,5], "", "(", Table2pro[4,6], "to", Table2pro[4,7], ")")
+Table2pro[5,9]<-paste(Table2pro[5,2], "", "(", Table2pro[5,3], "to", Table2pro[5,4], ")")
+Table2pro[5,10]<-paste(Table2pro[5,5], "", "(", Table2pro[5,6], "to", Table2pro[5,7], ")")
+Table2pro[6,9]<-paste(Table2pro[6,2], "", "(", Table2pro[6,3], "to", Table2pro[6,4], ")")
+Table2pro[6,10]<-paste(Table2pro[6,5], "", "(", Table2pro[6,6], "to", Table2pro[6,7], ")")
+Table2pro[7,9]<-paste(Table2pro[7,2], "", "(", Table2pro[7,3], "to", Table2pro[7,4], ")")
+Table2pro[7,10]<-paste(Table2pro[7,5], "", "(", Table2pro[7,6], "to", Table2pro[7,7], ")")
+Table2pro[8,9]<-paste(Table2pro[8,2], "", "(", Table2pro[8,3], "to", Table2pro[8,4], ")")
+Table2pro[8,10]<-paste(Table2pro[8,5], "", "(", Table2pro[8,6], "to", Table2pro[8,7], ")")
+Table2pro[9,9]<-paste(Table2pro[9,2], "", "(", Table2pro[9,3], "to", Table2pro[9,4], ")")
+Table2pro[9,10]<-paste(Table2pro[9,5], "", "(", Table2pro[9,6], "to", Table2pro[9,7], ")")
+Table2pro[10,9]<-paste(Table2pro[10,2], "", "(", Table2pro[10,3], "to", Table2pro[10,4], ")")
+Table2pro[10,10]<-paste(Table2pro[10,5], "", "(", Table2pro[10,6], "to", Table2pro[10,7], ")")
+Table2pro[11,9]<-paste(Table2pro[11,2], "", "(", Table2pro[11,3], "to", Table2pro[11,4], ")")
+Table2pro[11,10]<-paste(Table2pro[11,5], "", "(", Table2pro[11,6], "to", Table2pro[11,7], ")")
+Table2pro[12,9]<-paste(Table2pro[12,2], "", "(", Table2pro[12,3], "to", Table2pro[12,4], ")")
+Table2pro[12,10]<-paste(Table2pro[12,5], "", "(", Table2pro[12,6], "to", Table2pro[12,7], ")")
+Table2pro[13,9]<-paste(Table2pro[13,2], "", "(", Table2pro[13,3], "to", Table2pro[13,4], ")")
+Table2pro[13,10]<-paste(Table2pro[13,5], "", "(", Table2pro[13,6], "to", Table2pro[13,7], ")")
+Table2pro[14,9]<-paste(Table2pro[14,2], "", "(", Table2pro[14,3], "to", Table2pro[14,4], ")")
+Table2pro[14,10]<-paste(Table2pro[14,5], "", "(", Table2pro[14,6], "to", Table2pro[14,7], ")")
+Table2pro[15,9]<-paste(Table2pro[15,2], "", "(", Table2pro[15,3], "to", Table2pro[15,4], ")")
+Table2pro[15,10]<-paste(Table2pro[15,5], "", "(", Table2pro[15,6], "to", Table2pro[15,7], ")")
+Table2pro[16,9]<-paste(Table2pro[16,2], "", "(", Table2pro[16,3], "to", Table2pro[16,4], ")")
+Table2pro[16,10]<-paste(Table2pro[16,5], "", "(", Table2pro[16,6], "to", Table2pro[16,7], ")")
 
-Table3pros<-subset(Table3pro, select=c(Variable,`Prevalence (yes) (95% CI)`,  `P-value`))
 
-write_xlsx(Table3pros,"/Users/kijohnson/Box/A_T Drive - kjohnson/Research/Projects/CoronaVirus/STL CO COVID health services survey paper/Table3pros.xlsx")
+names(Table2pro)[9]<-"Prevalence (yes) (95% CI)"
+names(Table2pro)[10]<-"Prevalence (no) (95% CI)"
+
+Table2pros<-subset(Table2pro, select=c(Variable,`Prevalence (yes) (95% CI)`,  `P-value`))
+
+write_xlsx(Table2pros,"/Users/kijohnson/Box/A_T Drive - kjohnson/Research/Projects/CoronaVirus/STL CO COVID health services survey paper/Table2pros.xlsx")
+
 ```
 
 
@@ -1368,76 +1374,77 @@ n$Variable <- row.names(n)
 chiUMC<-svychisq(~medaptcan_p + UMC_scorecat,statistc="Wald", svy_I)
 chiUMC
 
-Table3par<-data.frame(matrix(ncol=8, nrow=0))
+Table2par<-data.frame(matrix(ncol=8, nrow=0))
 columns<-c("Variable", "Yes", "LowerCI", "UpperCI", "No", "LowerCIN", "UpperCIN", "P-value")
-colnames(Table3par)<-columns
-Table3par[1,]<-c("Overall", a[1,3], b[1,3], b[1,4], a[2,3], b[2,3], b[2,4], "NA") 
-Table3par[2,]<-c("White",   c[1,6], d[1,3], d[1,4], c[1,7], d[3,3], d[3,4], chiR$p.value)
-Table3par[3,]<-c("Black/Other", c[2,6], d[2,3], d[2,4], c[2,7], d[4,3], d[4,4], chiR$p.value) 
-Table3par[4,]<-c("18-44", e[1,6], f[1,3], f[1,4], c[1,7], f[4,3], f[4,4], chiage$p.value) 
-Table3par[5,]<-c("44-64", e[2,6], f[2,3], f[2,4], e[2,7], f[5,3], f[5,4], chiage$p.value) 
-Table3par[6,]<-c(">=65", e[3,6], f[3,3], f[3,4], e[3,7], f[6,3], f[6,4], chiage$p.value) 
-Table3par[7,]<-c("Male", g[1,6], h[1,3], h[1,4], g[1,7], h[3,3], h[3,4], chisex$p.value)
-Table3par[8,]<-c("Female", g[2,6], h[2,3], h[2,4], g[2,7], h[4,3], h[4,4],chisex$p.value) 
-Table3par[9,]<-c("Excellent/Very good", i[1,6], j[1,3], j[1,4], i[1,7], j[3,3], j[3,4], chiRH$p.value)
-Table3par[10,]<-c("Good", i[2,6], j[2,3], j[2,4], i[2,7], j[5,3], j[5,4], chiRH$p.value)
-Table3par[11,]<-c("Fair/Poor", i[3,6], j[3,3], j[3,4], i[3,7], j[6,3], j[6,4], chiRH$p.value)
-Table3par[12,]<-c("Has insurance", k[2,6], l[2,3], l[2,4], k[2,7], l[4,3], l[4,4], chiins$p.value) 
-Table3par[13,]<-c("Does not have insurance", k[1,6], l[1,3], l[1,4], k[1,7], l[3,3], l[3,4], chiins$p.value) 
-Table3par[14,]<-c("No Medical conditions", m[1,6], n[1,3], n[1,4], m[1,7], n[4,3], n[4,4], chiUMC$p.value) 
-Table3par[15,]<-c("One Medical condition", m[2,6], n[2,3], n[2,4], m[2,7], n[5,3], n[5,4], chiUMC$p.value) 
-Table3par[16,]<-c(">1 Medical condition", m[3,6], n[3,3], n[3,4], m[3,7], n[6,3], n[6,4], chiUMC$p.value) 
+colnames(Table2par)<-columns
+Table2par[1,]<-c("Overall", a[1,3], b[1,3], b[1,4], a[2,3], b[2,3], b[2,4], "NA") 
+Table2par[2,]<-c("White",   c[1,6], d[1,3], d[1,4], c[1,7], d[3,3], d[3,4], chiR$p.value)
+Table2par[3,]<-c("Black/Other", c[2,6], d[2,3], d[2,4], c[2,7], d[4,3], d[4,4], chiR$p.value) 
+Table2par[4,]<-c("18-44", e[1,6], f[1,3], f[1,4], c[1,7], f[4,3], f[4,4], chiage$p.value) 
+Table2par[5,]<-c("44-64", e[2,6], f[2,3], f[2,4], e[2,7], f[5,3], f[5,4], chiage$p.value) 
+Table2par[6,]<-c(">=65", e[3,6], f[3,3], f[3,4], e[3,7], f[6,3], f[6,4], chiage$p.value) 
+Table2par[7,]<-c("Male", g[1,6], h[1,3], h[1,4], g[1,7], h[3,3], h[3,4], chisex$p.value)
+Table2par[8,]<-c("Female", g[2,6], h[2,3], h[2,4], g[2,7], h[4,3], h[4,4],chisex$p.value) 
+Table2par[9,]<-c("Excellent/Very good", i[1,6], j[1,3], j[1,4], i[1,7], j[3,3], j[3,4], chiRH$p.value)
+Table2par[10,]<-c("Good", i[2,6], j[2,3], j[2,4], i[2,7], j[5,3], j[5,4], chiRH$p.value)
+Table2par[11,]<-c("Fair/Poor", i[3,6], j[3,3], j[3,4], i[3,7], j[6,3], j[6,4], chiRH$p.value)
+Table2par[12,]<-c("Has insurance", k[2,6], l[2,3], l[2,4], k[2,7], l[4,3], l[4,4], chiins$p.value) 
+Table2par[13,]<-c("Does not have insurance", k[1,6], l[1,3], l[1,4], k[1,7], l[3,3], l[3,4], chiins$p.value) 
+Table2par[14,]<-c("No Medical conditions", m[1,6], n[1,3], n[1,4], m[1,7], n[4,3], n[4,4], chiUMC$p.value) 
+Table2par[15,]<-c("One Medical condition", m[2,6], n[2,3], n[2,4], m[2,7], n[5,3], n[5,4], chiUMC$p.value) 
+Table2par[16,]<-c(">1 Medical condition", m[3,6], n[3,3], n[3,4], m[3,7], n[6,3], n[6,4], chiUMC$p.value) 
 
-Table3par$Yes<-round(as.numeric(Table3par$Yes), digit=2)
-Table3par$LowerCI<-round(as.numeric(Table3par$LowerCI), digit=2)
-Table3par$UpperCI<-round(as.numeric(Table3par$UpperCI), digit=2)
-Table3par$No<-round(as.numeric(Table3par$No), digit=2)
-Table3par$LowerCIN<-round(as.numeric(Table3par$LowerCIN), digit=2)
-Table3par$UpperCIN<-round(as.numeric(Table3par$UpperCIN), digit=2)
-Table3par$`P-value`<-as.numeric(Table3par$`P-value`)
-#Table3par[,-1] <-round(Table3par[,-1],3) #the "-1" excludes column 1
-Table3par
+Table2par$Yes<-round(as.numeric(Table2par$Yes), digit=2)
+Table2par$LowerCI<-round(as.numeric(Table2par$LowerCI), digit=2)
+Table2par$UpperCI<-round(as.numeric(Table2par$UpperCI), digit=2)
+Table2par$No<-round(as.numeric(Table2par$No), digit=2)
+Table2par$LowerCIN<-round(as.numeric(Table2par$LowerCIN), digit=2)
+Table2par$UpperCIN<-round(as.numeric(Table2par$UpperCIN), digit=2)
+Table2par$`P-value`<-as.numeric(Table2par$`P-value`)
+#Table2par[,-1] <-round(Table2par[,-1],3) #the "-1" excludes column 1
+Table2par
 
-Table3par[1,9]<-paste(Table3par[1,2],"","(",Table3par[1,3],"to",Table3par[1,4], ")")
-Table3par[1,10]<-paste(Table3par[1,5], "", "(", Table3par[1,6], "to", Table3par[1,7], ")")
-Table3par[2,9]<-paste(Table3par[2,2], "", "(", Table3par[2,3], "to", Table3par[2,4], ")")
-Table3par[2,10]<-paste(Table3par[2,5], "", "(", Table3par[2,6], "to", Table3par[2,7], ")")
-Table3par[3,9]<-paste(Table3par[3,2], "", "(", Table3par[3,3], "to", Table3par[3,4], ")")
-Table3par[3,10]<-paste(Table3par[3,5], "", "(", Table3par[3,6], "to", Table3par[3,7], ")")
-Table3par[4,9]<-paste(Table3par[4,2], "", "(", Table3par[4,3], "to", Table3par[4,4], ")")
-Table3par[4,10]<-paste(Table3par[4,5], "", "(", Table3par[4,6], "to", Table3par[4,7], ")")
-Table3par[5,9]<-paste(Table3par[5,2], "", "(", Table3par[5,3], "to", Table3par[5,4], ")")
-Table3par[5,10]<-paste(Table3par[5,5], "", "(", Table3par[5,6], "to", Table3par[5,7], ")")
-Table3par[6,9]<-paste(Table3par[6,2], "", "(", Table3par[6,3], "to", Table3par[6,4], ")")
-Table3par[6,10]<-paste(Table3par[6,5], "", "(", Table3par[6,6], "to", Table3par[6,7], ")")
-Table3par[7,9]<-paste(Table3par[7,2], "", "(", Table3par[7,3], "to", Table3par[7,4], ")")
-Table3par[7,10]<-paste(Table3par[7,5], "", "(", Table3par[7,6], "to", Table3par[7,7], ")")
-Table3par[8,9]<-paste(Table3par[8,2], "", "(", Table3par[8,3], "to", Table3par[8,4], ")")
-Table3par[8,10]<-paste(Table3par[8,5], "", "(", Table3par[8,6], "to", Table3par[8,7], ")")
-Table3par[9,9]<-paste(Table3par[9,2], "", "(", Table3par[9,3], "to", Table3par[9,4], ")")
-Table3par[9,10]<-paste(Table3par[9,5], "", "(", Table3par[9,6], "to", Table3par[9,7], ")")
-Table3par[10,9]<-paste(Table3par[10,2], "", "(", Table3par[10,3], "to", Table3par[10,4], ")")
-Table3par[10,10]<-paste(Table3par[10,5], "", "(", Table3par[10,6], "to", Table3par[10,7], ")")
-Table3par[11,9]<-paste(Table3par[11,2], "", "(", Table3par[11,3], "to", Table3par[11,4], ")")
-Table3par[11,10]<-paste(Table3par[11,5], "", "(", Table3par[11,6], "to", Table3par[11,7], ")")
-Table3par[12,9]<-paste(Table3par[12,2], "", "(", Table3par[12,3], "to", Table3par[12,4], ")")
-Table3par[12,10]<-paste(Table3par[12,5], "", "(", Table3par[12,6], "to", Table3par[12,7], ")")
-Table3par[13,9]<-paste(Table3par[13,2], "", "(", Table3par[13,3], "to", Table3par[13,4], ")")
-Table3par[13,10]<-paste(Table3par[13,5], "", "(", Table3par[13,6], "to", Table3par[13,7], ")")
-Table3par[14,9]<-paste(Table3par[14,2], "", "(", Table3par[14,3], "to", Table3par[14,4], ")")
-Table3par[14,10]<-paste(Table3par[14,5], "", "(", Table3par[14,6], "to", Table3par[14,7], ")")
-Table3par[15,9]<-paste(Table3par[15,2], "", "(", Table3par[15,3], "to", Table3par[15,4], ")")
-Table3par[15,10]<-paste(Table3par[15,5], "", "(", Table3par[15,6], "to", Table3par[15,7], ")")
-Table3par[16,9]<-paste(Table3par[16,2], "", "(", Table3par[16,3], "to", Table3par[16,4], ")")
-Table3par[16,10]<-paste(Table3par[16,5], "", "(", Table3par[16,6], "to", Table3par[16,7], ")")
+Table2par[1,9]<-paste(Table2par[1,2],"","(",Table2par[1,3],"to",Table2par[1,4], ")")
+Table2par[1,10]<-paste(Table2par[1,5], "", "(", Table2par[1,6], "to", Table2par[1,7], ")")
+Table2par[2,9]<-paste(Table2par[2,2], "", "(", Table2par[2,3], "to", Table2par[2,4], ")")
+Table2par[2,10]<-paste(Table2par[2,5], "", "(", Table2par[2,6], "to", Table2par[2,7], ")")
+Table2par[3,9]<-paste(Table2par[3,2], "", "(", Table2par[3,3], "to", Table2par[3,4], ")")
+Table2par[3,10]<-paste(Table2par[3,5], "", "(", Table2par[3,6], "to", Table2par[3,7], ")")
+Table2par[4,9]<-paste(Table2par[4,2], "", "(", Table2par[4,3], "to", Table2par[4,4], ")")
+Table2par[4,10]<-paste(Table2par[4,5], "", "(", Table2par[4,6], "to", Table2par[4,7], ")")
+Table2par[5,9]<-paste(Table2par[5,2], "", "(", Table2par[5,3], "to", Table2par[5,4], ")")
+Table2par[5,10]<-paste(Table2par[5,5], "", "(", Table2par[5,6], "to", Table2par[5,7], ")")
+Table2par[6,9]<-paste(Table2par[6,2], "", "(", Table2par[6,3], "to", Table2par[6,4], ")")
+Table2par[6,10]<-paste(Table2par[6,5], "", "(", Table2par[6,6], "to", Table2par[6,7], ")")
+Table2par[7,9]<-paste(Table2par[7,2], "", "(", Table2par[7,3], "to", Table2par[7,4], ")")
+Table2par[7,10]<-paste(Table2par[7,5], "", "(", Table2par[7,6], "to", Table2par[7,7], ")")
+Table2par[8,9]<-paste(Table2par[8,2], "", "(", Table2par[8,3], "to", Table2par[8,4], ")")
+Table2par[8,10]<-paste(Table2par[8,5], "", "(", Table2par[8,6], "to", Table2par[8,7], ")")
+Table2par[9,9]<-paste(Table2par[9,2], "", "(", Table2par[9,3], "to", Table2par[9,4], ")")
+Table2par[9,10]<-paste(Table2par[9,5], "", "(", Table2par[9,6], "to", Table2par[9,7], ")")
+Table2par[10,9]<-paste(Table2par[10,2], "", "(", Table2par[10,3], "to", Table2par[10,4], ")")
+Table2par[10,10]<-paste(Table2par[10,5], "", "(", Table2par[10,6], "to", Table2par[10,7], ")")
+Table2par[11,9]<-paste(Table2par[11,2], "", "(", Table2par[11,3], "to", Table2par[11,4], ")")
+Table2par[11,10]<-paste(Table2par[11,5], "", "(", Table2par[11,6], "to", Table2par[11,7], ")")
+Table2par[12,9]<-paste(Table2par[12,2], "", "(", Table2par[12,3], "to", Table2par[12,4], ")")
+Table2par[12,10]<-paste(Table2par[12,5], "", "(", Table2par[12,6], "to", Table2par[12,7], ")")
+Table2par[13,9]<-paste(Table2par[13,2], "", "(", Table2par[13,3], "to", Table2par[13,4], ")")
+Table2par[13,10]<-paste(Table2par[13,5], "", "(", Table2par[13,6], "to", Table2par[13,7], ")")
+Table2par[14,9]<-paste(Table2par[14,2], "", "(", Table2par[14,3], "to", Table2par[14,4], ")")
+Table2par[14,10]<-paste(Table2par[14,5], "", "(", Table2par[14,6], "to", Table2par[14,7], ")")
+Table2par[15,9]<-paste(Table2par[15,2], "", "(", Table2par[15,3], "to", Table2par[15,4], ")")
+Table2par[15,10]<-paste(Table2par[15,5], "", "(", Table2par[15,6], "to", Table2par[15,7], ")")
+Table2par[16,9]<-paste(Table2par[16,2], "", "(", Table2par[16,3], "to", Table2par[16,4], ")")
+Table2par[16,10]<-paste(Table2par[16,5], "", "(", Table2par[16,6], "to", Table2par[16,7], ")")
 
-names(Table3par)[9]<-"Prevalence (yes) (95% CI)"
-names(Table3par)[10]<-"Prevalence (no) (95% CI)"
+names(Table2par)[9]<-"Prevalence (yes) (95% CI)"
+names(Table2par)[10]<-"Prevalence (no) (95% CI)"
 
 
-Table3pars<-subset(Table3par, select=c(Variable,`Prevalence (yes) (95% CI)`,  `P-value`))
+Table2pars<-subset(Table2par, select=c(Variable,`Prevalence (yes) (95% CI)`,  `P-value`))
 
-write_xlsx(Table3pars,"/Users/kijohnson/Box/A_T Drive - kjohnson/Research/Projects/CoronaVirus/STL CO COVID health services survey paper/Table3pars.xlsx")
+write_xlsx(Table2pars,"/Users/kijohnson/Box/A_T Drive - kjohnson/Research/Projects/CoronaVirus/STL CO COVID health services survey paper/Table2pars.xlsx")
+
 
 ```
 
@@ -1541,77 +1548,78 @@ n$Variable <- row.names(n)
 chiUMC<-svychisq(~medaptcan_all + UMC_scorecat, statistc="Wald", svy_I)
 chiUMC
 
-Table3all<-data.frame(matrix(ncol=8, nrow=0))
+Table2all<-data.frame(matrix(ncol=8, nrow=0))
 columns<-c("Variable", "Yes", "LowerCI", "UpperCI",  "No", "LowerCIN", "UpperCIN",  "P-value")
-colnames(Table3all)<-columns
-Table3all[1,]<-c("Overall", a[2,3], b[2,3], b[2,4], a[1,3], b[1,3], b[1,4],  "NA")
-Table3all[2,]<-c("White", c[1,6], d[3,3], d[3,4], c[1,7], d[1,3], d[1,4],  chiR$p.value) 
-Table3all[3,]<-c("Black/Other", c[2,6], d[4,3], d[4,4], c[2,7], d[2,3], d[2,4],  chiR$p.value) 
-Table3all[4,]<-c("18-44", e[1,6], f[4,3], f[4,4], e[1,7], f[1,3], f[1,4], chiage$p.value) 
-Table3all[5,]<-c("445-64", e[2,6], f[5,3], f[5,4], e[2,7], f[2,3], f[2,4],  chiage$p.value) 
-Table3all[6,]<-c(">=65", e[3,6], f[6,3], f[6,4], e[3,7], f[3,3], f[3,4],  chiage$p.value) 
-Table3all[7,]<-c("Male", g[1,6], h[3,3], h[3,4], g[1,7], h[1,3], h[1,4],  chisex$p.value) 
-Table3all[8,]<-c("Female", g[2,6], h[4,3], h[4,4], g[2,7], h[2,3], h[2,4],  chisex$p.value) 
-Table3all[9,]<-c("Excellent/Very good", i[1,6], j[4,3], j[4,4], i[1,7], j[1,3], j[1,4], chiRH$p.value)
-Table3all[10,]<-c("Good", i[2,6], j[5,3], j[5,4], i[6,7], j[2,3], j[2,4], chiRH$p.value)
-Table3all[11,]<-c("Fair/Poor", i[3,6], j[6,3], j[6,4], i[7,7], j[3,3], j[3,4], chiRH$p.value)
-Table3all[12,]<-c("Has insurance", k[2,6], l[2,3], l[2,4], k[2,7], l[4,3], l[4,4], chiins$p.value) 
-Table3all[13,]<-c("Does not have insurance", k[1,6], l[1,3], l[1,4], k[1,7], l[3,3], l[3,4], chiins$p.value) 
-Table3all[14,]<-c("No Medical conditions", m[1,6], n[4,3], n[4,4], m[1,7], n[1,3], n[1,4],  chiUMC$p.value)
-Table3all[15,]<-c("One Medical condition", m[2,6], n[5,3], n[5,4], m[2,7], n[2,3], n[2,4],  chiUMC$p.value)
-Table3all[16,]<-c(">1 Medical condition",  m[3,6], n[6,3], n[6,4], m[3,7], n[3,3], n[3,4],  chiUMC$p.value) 
+colnames(Table2all)<-columns
+Table2all[1,]<-c("Overall", a[2,3], b[2,3], b[2,4], a[1,3], b[1,3], b[1,4],  "NA")
+Table2all[2,]<-c("White", c[1,6], d[3,3], d[3,4], c[1,7], d[1,3], d[1,4],  chiR$p.value) 
+Table2all[3,]<-c("Black/Other", c[2,6], d[4,3], d[4,4], c[2,7], d[2,3], d[2,4],  chiR$p.value) 
+Table2all[4,]<-c("18-44", e[1,6], f[4,3], f[4,4], e[1,7], f[1,3], f[1,4], chiage$p.value) 
+Table2all[5,]<-c("445-64", e[2,6], f[5,3], f[5,4], e[2,7], f[2,3], f[2,4],  chiage$p.value) 
+Table2all[6,]<-c(">=65", e[3,6], f[6,3], f[6,4], e[3,7], f[3,3], f[3,4],  chiage$p.value) 
+Table2all[7,]<-c("Male", g[1,6], h[3,3], h[3,4], g[1,7], h[1,3], h[1,4],  chisex$p.value) 
+Table2all[8,]<-c("Female", g[2,6], h[4,3], h[4,4], g[2,7], h[2,3], h[2,4],  chisex$p.value) 
+Table2all[9,]<-c("Excellent/Very good", i[1,6], j[4,3], j[4,4], i[1,7], j[1,3], j[1,4], chiRH$p.value)
+Table2all[10,]<-c("Good", i[2,6], j[5,3], j[5,4], i[6,7], j[2,3], j[2,4], chiRH$p.value)
+Table2all[11,]<-c("Fair/Poor", i[3,6], j[6,3], j[6,4], i[7,7], j[3,3], j[3,4], chiRH$p.value)
+Table2all[12,]<-c("Has insurance", k[2,6], l[2,3], l[2,4], k[2,7], l[4,3], l[4,4], chiins$p.value) 
+Table2all[13,]<-c("Does not have insurance", k[1,6], l[1,3], l[1,4], k[1,7], l[3,3], l[3,4], chiins$p.value) 
+Table2all[14,]<-c("No Medical conditions", m[1,6], n[4,3], n[4,4], m[1,7], n[1,3], n[1,4],  chiUMC$p.value)
+Table2all[15,]<-c("One Medical condition", m[2,6], n[5,3], n[5,4], m[2,7], n[2,3], n[2,4],  chiUMC$p.value)
+Table2all[16,]<-c(">1 Medical condition",  m[3,6], n[6,3], n[6,4], m[3,7], n[3,3], n[3,4],  chiUMC$p.value) 
 
-Table3all$Yes<-round(as.numeric(Table3all$Yes),2)
-Table3all$LowerCI<-round(as.numeric(Table3all$LowerCI),2)
-Table3all$UpperCI<-round(as.numeric(Table3all$UpperCI),2)
-Table3all$No<-round(as.numeric(Table3all$No),2)
-Table3all$LowerCIN<-round(as.numeric(Table3all$LowerCIN),2)
-Table3all$UpperCIN<-round(as.numeric(Table3all$UpperCIN),2)
-Table3all$`P-value`<-as.numeric(Table3all$`P-value`)
-#Table3all[,-1] <-round(Table3all[,-1],4) #the "-1" excludes column 1
-Table3all
+Table2all$Yes<-round(as.numeric(Table2all$Yes),2)
+Table2all$LowerCI<-round(as.numeric(Table2all$LowerCI),2)
+Table2all$UpperCI<-round(as.numeric(Table2all$UpperCI),2)
+Table2all$No<-round(as.numeric(Table2all$No),2)
+Table2all$LowerCIN<-round(as.numeric(Table2all$LowerCIN),2)
+Table2all$UpperCIN<-round(as.numeric(Table2all$UpperCIN),2)
+Table2all$`P-value`<-as.numeric(Table2all$`P-value`)
+#Table2all[,-1] <-round(Table2all[,-1],4) #the "-1" excludes column 1
+Table2all
 
-Table3all[1,9]<-paste(Table3all[1,2], "", "(", Table3all[1,3], "to", Table3all[1,4], ")")
-Table3all[1,10]<-paste(Table3all[1,5], "", "(", Table3all[1,6], "to", Table3all[1,7], ")")
-Table3all[2,9]<-paste(Table3all[2,2], "", "(", Table3all[2,3], "to", Table3all[2,4], ")")
-Table3all[2,10]<-paste(Table3all[2,5], "", "(", Table3all[2,6], "to", Table3all[2,7], ")")
-Table3all[3,9]<-paste(Table3all[3,2], "", "(", Table3all[3,3], "to", Table3all[3,4], ")")
-Table3all[3,10]<-paste(Table3all[3,5], "", "(", Table3all[3,6], "to", Table3all[3,7], ")")
-Table3all[4,9]<-paste(Table3all[4,2], "", "(", Table3all[4,3], "to", Table3all[4,4], ")")
-Table3all[4,10]<-paste(Table3all[4,5], "", "(", Table3all[4,6], "to", Table3all[4,7], ")")
-Table3all[5,9]<-paste(Table3all[5,2], "", "(", Table3all[5,3], "to", Table3all[5,4], ")")
-Table3all[5,10]<-paste(Table3all[5,5], "", "(", Table3all[5,6], "to", Table3all[5,7], ")")
-Table3all[6,9]<-paste(Table3all[6,2], "", "(", Table3all[6,3], "to", Table3all[6,4], ")")
-Table3all[6,10]<-paste(Table3all[6,5], "", "(", Table3all[6,6], "to", Table3all[6,7], ")")
-Table3all[7,9]<-paste(Table3all[7,2], "", "(", Table3all[7,3], "to", Table3all[7,4], ")")
-Table3all[7,10]<-paste(Table3all[7,5], "", "(", Table3all[7,6], "to", Table3all[7,7], ")")
-Table3all[8,9]<-paste(Table3all[8,2], "", "(", Table3all[8,3], "to", Table3all[8,4], ")")
-Table3all[8,10]<-paste(Table3all[8,5], "", "(", Table3all[8,6], "to", Table3all[8,7], ")")
-Table3all[9,9]<-paste(Table3all[9,2], "", "(", Table3all[9,3], "to", Table3all[9,4], ")")
-Table3all[9,10]<-paste(Table3all[9,5], "", "(", Table3all[9,6], "to", Table3all[9,7], ")")
-Table3all[10,9]<-paste(Table3all[10,2], "", "(", Table3all[10,3], "to", Table3all[10,4], ")")
-Table3all[10,10]<-paste(Table3all[10,5], "", "(", Table3all[10,6], "to", Table3all[10,7], ")")
-Table3all[11,9]<-paste(Table3all[11,2], "", "(", Table3all[11,3], "to", Table3all[11,4], ")")
-Table3all[11,10]<-paste(Table3all[11,5], "", "(", Table3all[11,6], "to", Table3all[11,7], ")")
-Table3all[12,9]<-paste(Table3all[12,2], "", "(", Table3all[12,3], "to", Table3all[12,4], ")")
-Table3all[12,10]<-paste(Table3all[12,5], "", "(", Table3all[12,6], "to", Table3all[12,7], ")")
-Table3all[13,9]<-paste(Table3all[13,2], "", "(", Table3all[13,3], "to", Table3all[13,4], ")")
-Table3all[13,10]<-paste(Table3all[13,5], "", "(", Table3all[13,6], "to", Table3all[13,7], ")")
-Table3all[14,9]<-paste(Table3all[14,2], "", "(", Table3all[14,3], "to", Table3all[14,4], ")")
-Table3all[14,10]<-paste(Table3all[14,5], "", "(", Table3all[14,6], "to", Table3all[14,7], ")")
-Table3all[15,9]<-paste(Table3all[15,2], "", "(", Table3all[15,3], "to", Table3all[15,4], ")")
-Table3all[15,10]<-paste(Table3all[15,5], "", "(", Table3all[15,6], "to", Table3all[15,7], ")")
-Table3all[16,9]<-paste(Table3all[16,2], "", "(", Table3all[16,3], "to", Table3all[16,4], ")")
-Table3all[16,10]<-paste(Table3all[16,5], "", "(", Table3all[16,6], "to", Table3all[16,7], ")")
+Table2all[1,9]<-paste(Table2all[1,2], "", "(", Table2all[1,3], "to", Table2all[1,4], ")")
+Table2all[1,10]<-paste(Table2all[1,5], "", "(", Table2all[1,6], "to", Table2all[1,7], ")")
+Table2all[2,9]<-paste(Table2all[2,2], "", "(", Table2all[2,3], "to", Table2all[2,4], ")")
+Table2all[2,10]<-paste(Table2all[2,5], "", "(", Table2all[2,6], "to", Table2all[2,7], ")")
+Table2all[3,9]<-paste(Table2all[3,2], "", "(", Table2all[3,3], "to", Table2all[3,4], ")")
+Table2all[3,10]<-paste(Table2all[3,5], "", "(", Table2all[3,6], "to", Table2all[3,7], ")")
+Table2all[4,9]<-paste(Table2all[4,2], "", "(", Table2all[4,3], "to", Table2all[4,4], ")")
+Table2all[4,10]<-paste(Table2all[4,5], "", "(", Table2all[4,6], "to", Table2all[4,7], ")")
+Table2all[5,9]<-paste(Table2all[5,2], "", "(", Table2all[5,3], "to", Table2all[5,4], ")")
+Table2all[5,10]<-paste(Table2all[5,5], "", "(", Table2all[5,6], "to", Table2all[5,7], ")")
+Table2all[6,9]<-paste(Table2all[6,2], "", "(", Table2all[6,3], "to", Table2all[6,4], ")")
+Table2all[6,10]<-paste(Table2all[6,5], "", "(", Table2all[6,6], "to", Table2all[6,7], ")")
+Table2all[7,9]<-paste(Table2all[7,2], "", "(", Table2all[7,3], "to", Table2all[7,4], ")")
+Table2all[7,10]<-paste(Table2all[7,5], "", "(", Table2all[7,6], "to", Table2all[7,7], ")")
+Table2all[8,9]<-paste(Table2all[8,2], "", "(", Table2all[8,3], "to", Table2all[8,4], ")")
+Table2all[8,10]<-paste(Table2all[8,5], "", "(", Table2all[8,6], "to", Table2all[8,7], ")")
+Table2all[9,9]<-paste(Table2all[9,2], "", "(", Table2all[9,3], "to", Table2all[9,4], ")")
+Table2all[9,10]<-paste(Table2all[9,5], "", "(", Table2all[9,6], "to", Table2all[9,7], ")")
+Table2all[10,9]<-paste(Table2all[10,2], "", "(", Table2all[10,3], "to", Table2all[10,4], ")")
+Table2all[10,10]<-paste(Table2all[10,5], "", "(", Table2all[10,6], "to", Table2all[10,7], ")")
+Table2all[11,9]<-paste(Table2all[11,2], "", "(", Table2all[11,3], "to", Table2all[11,4], ")")
+Table2all[11,10]<-paste(Table2all[11,5], "", "(", Table2all[11,6], "to", Table2all[11,7], ")")
+Table2all[12,9]<-paste(Table2all[12,2], "", "(", Table2all[12,3], "to", Table2all[12,4], ")")
+Table2all[12,10]<-paste(Table2all[12,5], "", "(", Table2all[12,6], "to", Table2all[12,7], ")")
+Table2all[13,9]<-paste(Table2all[13,2], "", "(", Table2all[13,3], "to", Table2all[13,4], ")")
+Table2all[13,10]<-paste(Table2all[13,5], "", "(", Table2all[13,6], "to", Table2all[13,7], ")")
+Table2all[14,9]<-paste(Table2all[14,2], "", "(", Table2all[14,3], "to", Table2all[14,4], ")")
+Table2all[14,10]<-paste(Table2all[14,5], "", "(", Table2all[14,6], "to", Table2all[14,7], ")")
+Table2all[15,9]<-paste(Table2all[15,2], "", "(", Table2all[15,3], "to", Table2all[15,4], ")")
+Table2all[15,10]<-paste(Table2all[15,5], "", "(", Table2all[15,6], "to", Table2all[15,7], ")")
+Table2all[16,9]<-paste(Table2all[16,2], "", "(", Table2all[16,3], "to", Table2all[16,4], ")")
+Table2all[16,10]<-paste(Table2all[16,5], "", "(", Table2all[16,6], "to", Table2all[16,7], ")")
 
-names(Table3all)[9]<-"Prevalence (yes) (95% CI)"
-names(Table3all)[10]<-"Prevalence (no) (95% CI)"
+names(Table2all)[9]<-"Prevalence (yes) (95% CI)"
+names(Table2all)[10]<-"Prevalence (no) (95% CI)"
 
-Table3alls<-subset(Table3all, select=c(Variable,  `Prevalence (yes) (95% CI)`, `P-value`))
+Table2alls<-subset(Table2all, select=c(Variable,  `Prevalence (yes) (95% CI)`, `P-value`))
 
-write_xlsx(Table3alls,"/Users/kijohnson/Box/A_T Drive - kjohnson/Research/Projects/CoronaVirus/STL CO COVID health services survey paper/Table3alls.xlsx")
+write_xlsx(Table2alls,"/Users/kijohnson/Box/A_T Drive - kjohnson/Research/Projects/CoronaVirus/STL CO COVID health services survey paper/Table2alls.xlsx")
+
 ```
-## Table 4: Cancer screening
+## Supplementary Table 3: Cancer screening
 ```{r}
 a<-as.data.frame(svymean(~medaptcan_all_comb_canscreen, design=svy_I, na.rm=TRUE))
 a$percent<-a$mean*100
@@ -1643,7 +1651,7 @@ f$Variable <- row.names(f)
 ```
 
 
-## Table 4: Primary Care  appointments cancelled by participant or provider
+## Supplementary Table 3: Primary Care  appointments cancelled by participant or provider
 ```{r}
 a<-as.data.frame(svymean(~medaptcan_all_comb_PC, design=svy_I, na.rm=TRUE))
 a$percent<-a$mean*100
@@ -1674,7 +1682,7 @@ f$Variable <- row.names(f)
 
 ```
 
-## Table 4: Elective surgery or procedure appointments cancelled by provider
+## Supplementary Table 3: Elective surgery or procedure appointments cancelled by provider
 ```{r}
 a<-as.data.frame(svymean(~medaptcan_all_comb_ESP, design=svy_I, na.rm=TRUE))
 a$percent<-a$mean*100
@@ -1704,7 +1712,7 @@ f$highCI<-f$`97.5 %`*100
 f$Variable <- row.names(f)
 ```
 
-## Table 4: Mental Health appointments cancelled by provider
+## Supplementary Table 3: Mental Health appointments cancelled by provider
 ```{r}
 a<-as.data.frame(svymean(~medaptcan_all_comb_MH, design=svy_I, na.rm=TRUE))
 a$percent<-a$mean*100
@@ -1735,7 +1743,7 @@ f$Variable <- row.names(f)
 table(exc_ex$medaptcantype_comb_MHp)
 ```
 
-## Dermatology appointments cancelled by provider
+## Supplementary Table 3: Dermatology appointments cancelled by provider
 ```{r}
 a<-as.data.frame(svymean(~medaptcan_all_comb_derm, design=svy_I, na.rm=TRUE))
 a$percent<-a$mean*100
@@ -1795,7 +1803,7 @@ f$highCI<-f$`97.5 %`*100
 f$Variable <- row.names(f)
 ```
 
-##  Table 4: Other speciality
+##  Supplementary Table 3: Other speciality
 ```{r}
 a<-as.data.frame(svymean(~medaptcan_all_comb_othspe, design=svy_I, na.rm=TRUE))
 a$percent<-a$mean*100
@@ -1825,7 +1833,7 @@ f$highCI<-f$`97.5 %`*100
 f$Variable <- row.names(f)
 ```
 
-## Table 4: PT
+## Supplementary Table 3: PT
 ```{r}
 a<-as.data.frame(svymean(~medaptcan_all_comb_PT, design=svy_I, na.rm=TRUE))
 a$percent<-a$mean*100
@@ -1855,7 +1863,7 @@ f$highCI<-f$`97.5 %`*100
 f$Variable <- row.names(f)
 ```
 
-## Table 4: Dental
+## Supplementary Table 3: Dental
 ```{r}
 a<-as.data.frame(svymean(~medaptcan_all_comb_dent, design=svy_I, na.rm=TRUE))
 a$percent<-a$mean*100
@@ -1885,7 +1893,7 @@ f$highCI<-f$`97.5 %`*100
 f$Variable <- row.names(f)
 ```
 
-## Table 4: Eye
+## Supplementary Table 3: Eye
 ```{r}
 a<-as.data.frame(svymean(~medaptcan_all_comb_eye, design=svy_I, na.rm=TRUE))
 a$percent<-a$mean*100
@@ -1915,7 +1923,7 @@ f$highCI<-f$`97.5 %`*100
 f$Variable <- row.names(f)
 ```
 
-## Table 4: Other
+## Supplementary Table 3: Other
 ```{r}
 
 a<-as.data.frame(svymean(~medaptcan_all_comb_oth, design=svy_I, na.rm=TRUE))
@@ -1946,7 +1954,7 @@ f$highCI<-f$`97.5 %`*100
 f$Variable <- row.names(f)
 ```
 
-## Table 4:  Unsure
+## Supplementary Table 3:  Unsure
 ```{r}
 
 a<-as.data.frame(svymean(~medaptcan_all_comb_unsure, design=svy_I, na.rm=TRUE))
@@ -1978,7 +1986,7 @@ f$highCI<-f$`97.5 %`*100
 f$Variable <- row.names(f)
 ```
 
-## Table 5: Health services--ER Avoidance
+## Table 3: Health services--ER Avoidance
 ```{r}
 a<-as.data.frame(svymean(~ERavoid, design=svy_I))
 a$percent<-a$mean*100
@@ -2074,81 +2082,80 @@ n$Variable <- row.names(n)
 
 chiUMC<-svychisq(~ERavoid + UMC_scorecat,statistic="Wald", svy_I)
 chiUMC
-
-
-table5<-data.frame(matrix(ncol=8, nrow=0))
+Table3<-data.frame(matrix(ncol=8, nrow=0))
 columns<-c("Variable", "Yes", "LowerCI", "UpperCI", "No", "LowerCIN", "UpperCIN", "P-value")
-colnames(table5)<-columns
-table5[1,]<-c("Overall", a[1,3], b[1,3], b[1,4], a[2,3], b[2,3], b[2,4], "NA") 
-table5[2,]<-c("White",   c[1,6], d[1,3], d[1,4], c[1,7], d[3,3], d[3,4], chiR$p.value)
-table5[3,]<-c("Black/Other", c[2,6], d[2,3], d[2,4], c[2,7], d[4,3], d[4,4], chiR$p.value) 
-table5[4,]<-c("<40", e[1,6], f[1,3], f[1,4], c[1,7], f[4,3], f[4,4], chiage$p.value) 
-table5[5,]<-c("40-60", e[2,6], f[2,3], f[2,4], e[2,7], f[5,3], f[5,4], chiage$p.value) 
-table5[6,]<-c(">60", e[3,6], f[3,3], f[3,4], e[3,7], f[6,3], f[6,4], chiage$p.value) 
-table5[7,]<-c("Male", g[1,6], h[1,3], h[1,4], g[1,7], h[3,3], h[3,4], chisex$p.value)
-table5[8,]<-c("Female", g[2,6], h[2,3], h[2,4], g[2,7], h[4,3], h[4,4],chisex$p.value) 
-table5[9,]<-c("Excellent/Very good", i[1,6], j[1,3], j[1,4], i[1,7], j[3,3], j[3,4], chiRH$p.value)
-table5[10,]<-c("Good", i[2,6], j[2,3], j[2,4], i[2,7], j[5,3], j[5,4], chiRH$p.value)
-table5[11,]<-c("Fair/Poor", i[3,6], j[3,3], j[3,4], i[3,7], j[6,3], j[6,4], chiRH$p.value)
-table5[12,]<-c("Has insurance", k[2,6], l[2,3], l[2,4], k[2,7], l[4,3], l[4,4], chiins$p.value) 
-table5[13,]<-c("Does not have insurance", k[1,6], l[1,3], l[1,4], k[1,7], l[3,3], l[3,4], chiins$p.value) 
-table5[14,]<-c("No Medical conditions", m[1,6], n[1,3], n[1,4], m[1,7], n[4,3], n[4,4], chiUMC$p.value) 
-table5[15,]<-c("One Medical condition", m[2,6], n[2,3], n[2,4], m[2,7], n[5,3], n[5,4], chiUMC$p.value) 
-table5[16,]<-c(">1 Medical condition", m[3,6], n[3,3], n[3,4], m[3,7], n[6,3], n[6,4], chiUMC$p.value)
+colnames(Table3)<-columns
+Table3[1,]<-c("Overall", a[1,3], b[1,3], b[1,4], a[2,3], b[2,3], b[2,4], "NA") 
+Table3[2,]<-c("White",   c[1,6], d[1,3], d[1,4], c[1,7], d[3,3], d[3,4], chiR$p.value)
+Table3[3,]<-c("Black/Other", c[2,6], d[2,3], d[2,4], c[2,7], d[4,3], d[4,4], chiR$p.value) 
+Table3[4,]<-c("<40", e[1,6], f[1,3], f[1,4], c[1,7], f[4,3], f[4,4], chiage$p.value) 
+Table3[5,]<-c("40-60", e[2,6], f[2,3], f[2,4], e[2,7], f[5,3], f[5,4], chiage$p.value) 
+Table3[6,]<-c(">60", e[3,6], f[3,3], f[3,4], e[3,7], f[6,3], f[6,4], chiage$p.value) 
+Table3[7,]<-c("Male", g[1,6], h[1,3], h[1,4], g[1,7], h[3,3], h[3,4], chisex$p.value)
+Table3[8,]<-c("Female", g[2,6], h[2,3], h[2,4], g[2,7], h[4,3], h[4,4],chisex$p.value) 
+Table3[9,]<-c("Excellent/Very good", i[1,6], j[1,3], j[1,4], i[1,7], j[3,3], j[3,4], chiRH$p.value)
+Table3[10,]<-c("Good", i[2,6], j[2,3], j[2,4], i[2,7], j[5,3], j[5,4], chiRH$p.value)
+Table3[11,]<-c("Fair/Poor", i[3,6], j[3,3], j[3,4], i[3,7], j[6,3], j[6,4], chiRH$p.value)
+Table3[12,]<-c("Has insurance", k[2,6], l[2,3], l[2,4], k[2,7], l[4,3], l[4,4], chiins$p.value) 
+Table3[13,]<-c("Does not have insurance", k[1,6], l[1,3], l[1,4], k[1,7], l[3,3], l[3,4], chiins$p.value) 
+Table3[14,]<-c("No Medical conditions", m[1,6], n[1,3], n[1,4], m[1,7], n[4,3], n[4,4], chiUMC$p.value) 
+Table3[15,]<-c("One Medical condition", m[2,6], n[2,3], n[2,4], m[2,7], n[5,3], n[5,4], chiUMC$p.value) 
+Table3[16,]<-c(">1 Medical condition", m[3,6], n[3,3], n[3,4], m[3,7], n[6,3], n[6,4], chiUMC$p.value)
 
-table5$Yes<-round(as.numeric(table5$Yes), digit=2)
-table5$LowerCI<-round(as.numeric(table5$LowerCI), digit=2)
-table5$UpperCI<-round(as.numeric(table5$UpperCI), digit=2)
-table5$No<-round(as.numeric(table5$No), digit=2)
-table5$LowerCIN<-round(as.numeric(table5$LowerCIN), digit=2)
-table5$UpperCIN<-round(as.numeric(table5$UpperCIN), digit=2)
-table5$`P-value`<-as.numeric(table5$`P-value`)
-#table5[,-1] <-round(table5[,-1],3) #the "-1" excludes column 1
-table5
+Table3$Yes<-round(as.numeric(Table3$Yes), digit=2)
+Table3$LowerCI<-round(as.numeric(Table3$LowerCI), digit=2)
+Table3$UpperCI<-round(as.numeric(Table3$UpperCI), digit=2)
+Table3$No<-round(as.numeric(Table3$No), digit=2)
+Table3$LowerCIN<-round(as.numeric(Table3$LowerCIN), digit=2)
+Table3$UpperCIN<-round(as.numeric(Table3$UpperCIN), digit=2)
+Table3$`P-value`<-as.numeric(Table3$`P-value`)
+#Table3[,-1] <-round(Table3[,-1],3) #the "-1" excludes column 1
+Table3
 
-table5[1,9]<-paste(table5[1,2],"","(",table5[1,3],"to",table5[1,4], ")")
-table5[1,10]<-paste(table5[1,5], "", "(", table5[1,6], "to", table5[1,7], ")")
-table5[2,9]<-paste(table5[2,2], "", "(", table5[2,3], "to", table5[2,4], ")")
-table5[2,10]<-paste(table5[2,5], "", "(", table5[2,6], "to", table5[2,7], ")")
-table5[3,9]<-paste(table5[3,2], "", "(", table5[3,3], "to", table5[3,4], ")")
-table5[3,10]<-paste(table5[3,5], "", "(", table5[3,6], "to", table5[3,7], ")")
-table5[4,9]<-paste(table5[4,2], "", "(", table5[4,3], "to", table5[4,4], ")")
-table5[4,10]<-paste(table5[4,5], "", "(", table5[4,6], "to", table5[4,7], ")")
-table5[5,9]<-paste(table5[5,2], "", "(", table5[5,3], "to", table5[5,4], ")")
-table5[5,10]<-paste(table5[5,5], "", "(", table5[5,6], "to", table5[5,7], ")")
-table5[6,9]<-paste(table5[6,2], "", "(", table5[6,3], "to", table5[6,4], ")")
-table5[6,10]<-paste(table5[6,5], "", "(", table5[6,6], "to", table5[6,7], ")")
-table5[7,9]<-paste(table5[7,2], "", "(", table5[7,3], "to", table5[7,4], ")")
-table5[7,10]<-paste(table5[7,5], "", "(", table5[7,6], "to", table5[7,7], ")")
-table5[8,9]<-paste(table5[8,2], "", "(", table5[8,3], "to", table5[8,4], ")")
-table5[8,10]<-paste(table5[8,5], "", "(", table5[8,6], "to", table5[8,7], ")")
-table5[9,9]<-paste(table5[9,2], "", "(", table5[9,3], "to", table5[9,4], ")")
-table5[9,10]<-paste(table5[9,5], "", "(", table5[9,6], "to", table5[9,7], ")")
-table5[10,9]<-paste(table5[10,2], "", "(", table5[10,3], "to", table5[10,4], ")")
-table5[10,10]<-paste(table5[10,5], "", "(", table5[10,6], "to", table5[10,7], ")")
-table5[11,9]<-paste(table5[11,2], "", "(", table5[11,3], "to", table5[11,4], ")")
-table5[11,10]<-paste(table5[11,5], "", "(", table5[11,6], "to", table5[11,7], ")")
-table5[12,9]<-paste(table5[12,2], "", "(", table5[12,3], "to", table5[12,4], ")")
-table5[12,10]<-paste(table5[12,5], "", "(", table5[12,6], "to", table5[12,7], ")")
-table5[13,9]<-paste(table5[13,2], "", "(", table5[13,3], "to", table5[13,4], ")")
-table5[13,10]<-paste(table5[13,5], "", "(", table5[13,6], "to", table5[13,7], ")")
-table5[14,9]<-paste(table5[14,2], "", "(", table5[14,3], "to", table5[14,4], ")")
-table5[14,10]<-paste(table5[14,5], "", "(", table5[14,6], "to", table5[14,7], ")")
-table5[15,9]<-paste(table5[15,2], "", "(", table5[15,3], "to", table5[15,4], ")")
-table5[15,10]<-paste(table5[15,5], "", "(", table5[15,6], "to", table5[15,7], ")")
-table5[16,9]<-paste(table5[16,2], "", "(", table5[16,3], "to", table5[16,4], ")")
-table5[16,10]<-paste(table5[16,5], "", "(", table5[16,6], "to", table5[16,7], ")")
+Table3[1,9]<-paste(Table3[1,2],"","(",Table3[1,3],"to",Table3[1,4], ")")
+Table3[1,10]<-paste(Table3[1,5], "", "(", Table3[1,6], "to", Table3[1,7], ")")
+Table3[2,9]<-paste(Table3[2,2], "", "(", Table3[2,3], "to", Table3[2,4], ")")
+Table3[2,10]<-paste(Table3[2,5], "", "(", Table3[2,6], "to", Table3[2,7], ")")
+Table3[3,9]<-paste(Table3[3,2], "", "(", Table3[3,3], "to", Table3[3,4], ")")
+Table3[3,10]<-paste(Table3[3,5], "", "(", Table3[3,6], "to", Table3[3,7], ")")
+Table3[4,9]<-paste(Table3[4,2], "", "(", Table3[4,3], "to", Table3[4,4], ")")
+Table3[4,10]<-paste(Table3[4,5], "", "(", Table3[4,6], "to", Table3[4,7], ")")
+Table3[5,9]<-paste(Table3[5,2], "", "(", Table3[5,3], "to", Table3[5,4], ")")
+Table3[5,10]<-paste(Table3[5,5], "", "(", Table3[5,6], "to", Table3[5,7], ")")
+Table3[6,9]<-paste(Table3[6,2], "", "(", Table3[6,3], "to", Table3[6,4], ")")
+Table3[6,10]<-paste(Table3[6,5], "", "(", Table3[6,6], "to", Table3[6,7], ")")
+Table3[7,9]<-paste(Table3[7,2], "", "(", Table3[7,3], "to", Table3[7,4], ")")
+Table3[7,10]<-paste(Table3[7,5], "", "(", Table3[7,6], "to", Table3[7,7], ")")
+Table3[8,9]<-paste(Table3[8,2], "", "(", Table3[8,3], "to", Table3[8,4], ")")
+Table3[8,10]<-paste(Table3[8,5], "", "(", Table3[8,6], "to", Table3[8,7], ")")
+Table3[9,9]<-paste(Table3[9,2], "", "(", Table3[9,3], "to", Table3[9,4], ")")
+Table3[9,10]<-paste(Table3[9,5], "", "(", Table3[9,6], "to", Table3[9,7], ")")
+Table3[10,9]<-paste(Table3[10,2], "", "(", Table3[10,3], "to", Table3[10,4], ")")
+Table3[10,10]<-paste(Table3[10,5], "", "(", Table3[10,6], "to", Table3[10,7], ")")
+Table3[11,9]<-paste(Table3[11,2], "", "(", Table3[11,3], "to", Table3[11,4], ")")
+Table3[11,10]<-paste(Table3[11,5], "", "(", Table3[11,6], "to", Table3[11,7], ")")
+Table3[12,9]<-paste(Table3[12,2], "", "(", Table3[12,3], "to", Table3[12,4], ")")
+Table3[12,10]<-paste(Table3[12,5], "", "(", Table3[12,6], "to", Table3[12,7], ")")
+Table3[13,9]<-paste(Table3[13,2], "", "(", Table3[13,3], "to", Table3[13,4], ")")
+Table3[13,10]<-paste(Table3[13,5], "", "(", Table3[13,6], "to", Table3[13,7], ")")
+Table3[14,9]<-paste(Table3[14,2], "", "(", Table3[14,3], "to", Table3[14,4], ")")
+Table3[14,10]<-paste(Table3[14,5], "", "(", Table3[14,6], "to", Table3[14,7], ")")
+Table3[15,9]<-paste(Table3[15,2], "", "(", Table3[15,3], "to", Table3[15,4], ")")
+Table3[15,10]<-paste(Table3[15,5], "", "(", Table3[15,6], "to", Table3[15,7], ")")
+Table3[16,9]<-paste(Table3[16,2], "", "(", Table3[16,3], "to", Table3[16,4], ")")
+Table3[16,10]<-paste(Table3[16,5], "", "(", Table3[16,6], "to", Table3[16,7], ")")
 
 
-names(table5)[9]<-"Prevalence (yes) (95% CI)"
-names(table5)[10]<-"Prevalence (no) (95% CI)"
+names(Table3)[9]<-"Prevalence (yes) (95% CI)"
+names(Table3)[10]<-"Prevalence (no) (95% CI)"
 
-table5s<-subset(table5, select=c(Variable,`Prevalence (yes) (95% CI)`,  `P-value`))
+Table3s<-subset(Table3, select=c(Variable,`Prevalence (yes) (95% CI)`,  `P-value`))
 
-write_xlsx(table5s,"/Users/kijohnson/Box/A_T Drive - kjohnson/Research/Projects/CoronaVirus/STL CO COVID health services survey paper/table5s.xlsx")
+write_xlsx(Table3s,"/Users/kijohnson/Box/A_T Drive - kjohnson/Research/Projects/CoronaVirus/STL CO COVID health services survey paper/Table3s.xlsx")
+
 ```
 
-## Figure 2: Predictors of ER avoidance
+## Predictors of ER avoidance
 ```{r}
 ## Set up predictive model
 #recode ERavoid as 0 1
@@ -2169,9 +2176,8 @@ options(digits=3)
 summ(mysvyglmp, confint=TRUE, exp=TRUE)
 ```
 
-## Supplementary table 4: Reasons for avoiding ER-Concern for COVID 
+## Supplementary table 6: Reasons for avoiding ER-Concern for COVID 
 ```{r}
-table(exc_ex$ERavoid_why)
 
 svy_I_s<-svydesign(id=~1, weights=~Survey_Weight, data=exc_ex)
 sub<-subset(svy_I_s, !is.na(ERavoid_why))
@@ -2182,9 +2188,17 @@ a$lowCI<-(a$mean - 1.96*a$SE)*100
 a$highCI<-(a$mean + 1.96*a$SE)*100
 
 print(a)
+
+
+```
+## Supplementary Table 7
+```{r}
+table(exc_ex$ERavoid_why)
+addmargins(table(exc_ex$ERavoid_why))
 ```
 
-## Figure 2: Forest plot
+
+## Figure 1: Forest plot and table
 ```{r}
 
 
