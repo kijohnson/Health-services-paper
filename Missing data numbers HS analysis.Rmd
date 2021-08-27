@@ -1,0 +1,53 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+## Open libraries and Import data
+
+library(writexl)
+library(survey)
+library(readr)
+library(haven)
+library(ggplot2)
+library(tidyverse)        #data management/visulizaiton
+library(RColorBrewer)     #ggplot colors
+library(patchwork)        #combine graphs
+library(forestplot)
+
+#install.packages("jtools")
+library(jtools)
+
+#import non-imputed dataset
+stltestsurv<-read_sas("/Users/kijohnson/Desktop/MSGnoimp.sas7bdat")
+
+stltestsurv<-stltestsurv[which(stltestsurv$SURVEYTEST!=3),] #exclude test repsondents only
+
+table(stltestsurv$CCHC01, useNA="always")
+table(stltestsurv$CCHC02, useNA="always")
+table(stltestsurv$CCHC03, useNA="always")
+table(stltestsurv$CURRASTH, useNA="always")
+table(stltestsurv$CCHC06, useNA="always")
+table(stltestsurv$CCHC07, useNA="always")
+table(stltestsurv$CCHC08, useNA="always")
+table(stltestsurv$CCHC09, useNA="always")
+table(stltestsurv$CCHC10, useNA="always")
+table(stltestsurv$CCHC11, useNA="always")
+table(stltestsurv$CCHC12, useNA="always")
+
+table(stltestsurv$BPH01, useNA="always")
+table(stltestsurv$INSURANCE, useNA="always")
+table(stltestsurv$CHS01, useNA="always")
+table(stltestsurv$SACI12, useNA="always")
+table(stltestsurv$SACI14, useNA="always")
+table(stltestsurv$SACI16A, useNA="always")
+
+table(stltestsurv$MU_SEX, useNA="always")
+table(stltestsurv$PATIENT_RACE, useNA="always")
+summary(stltestsurv$INTEGERAGE, useNA="always")
+
+#of participants with missing data
+attach(stltestsurv)
+test<-stltestsurv[which(CCHC01==9|CCHC02==9|CCHC03==9|is.na(CURRASTH)|CCHC06==9|CCHC07==9|CCHC08==9|CCHC09==9|CCHC10==9|CCHC11==9|CCHC12==9|BPH01==9|is.na(INSURANCE)|SACI12==9|SACI14==9|SACI16A==3|is.na(MU_SEX)|is.na(PATIENT_RACE)|is.na(INTEGERAGE)),]
+```
+
